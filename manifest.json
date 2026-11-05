@@ -1,0 +1,9 @@
+{
+  "name": "Liste de courses",
+  "short_name": "Courses",
+  "start_url": "index.php",
+  "display": "standalone",
+  "background_color": "#f6f4ee",
+  "theme_color": "#2f7d4f",
+  "icons": [{ "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

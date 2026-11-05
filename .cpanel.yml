@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    # Remplace DEPLOYPATH par le dossier du sous-domaine (cPanel → Domaines).
+    # config.php et data/ ne sont pas dans le depot : ils ne sont jamais ecrases.
+    - export DEPLOYPATH=/home/IDENTIFIANT/courses.robinpastorel.com/
+    - /bin/cp -R app assets $DEPLOYPATH
+    - /bin/cp .htaccess index.php api.php login.php logout.php manifest.json $DEPLOYPATH
