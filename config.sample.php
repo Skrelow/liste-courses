@@ -11,7 +11,8 @@ return [
     ],
     // Prénoms proposés à la connexion
     'users' => ['Robin', 'Toi'],
-    // Mot de passe commun. Génère le hash avec : php -r "echo password_hash('TON_MOT_DE_PASSE', PASSWORD_DEFAULT);"
-    'password_hash' => 'COLLE-ICI-LE-HASH',
+    // Mot de passe commun à vous deux (ce fichier n'est ni versionné ni accessible depuis le web).
+    'password' => 'CHOISIS-UN-MOT-DE-PASSE',
+    // Variante plus sûre : 'password_hash' => '...' (php -r "echo password_hash('mdp', PASSWORD_DEFAULT);")
     'timezone' => 'Europe/Paris',
 ];

@@ -7,7 +7,10 @@ $err = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = (string) ($_POST['user'] ?? '');
     $hash = (string) cfg('password_hash', '');
-    if (in_array($name, $users, true) && $hash !== '' && password_verify((string) ($_POST['password'] ?? ''), $hash)) {
+    $plain = (string) cfg('password', '');
+    $given = (string) ($_POST['password'] ?? '');
+    $ok = ($hash !== '' && password_verify($given, $hash)) || ($plain !== '' && hash_equals($plain, $given));
+    if (in_array($name, $users, true) && $ok) {
         session_regenerate_id(true);
         $_SESSION['user'] = $name;
         header('Location: index.php');
