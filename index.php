@@ -10,19 +10,38 @@ $user = require_login();
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="assets/icon.svg">
 <link rel="apple-touch-icon" href="assets/icon.svg">
-<link rel="stylesheet" href="assets/style.css?v=1">
+<link rel="stylesheet" href="assets/style.css?v=2">
 </head><body>
 <header><h1>🛒 Courses</h1><span><?= h($user) ?> · <a href="logout.php">Quitter</a></span></header>
+<nav id="tabs">
+  <button data-tab="buy" class="on">À acheter</button><button data-tab="stock">Placard</button><button data-tab="plats">Plats</button><button data-tab="import">Import</button>
+</nav>
 <main>
-  <form id="add" autocomplete="off">
-    <input id="name" placeholder="Ajouter un article…" required>
-    <input id="qty" placeholder="Qté" class="qty">
-    <select id="aisle"><?php foreach (aisles() as $k => [$l, $e]): ?><option value="<?= h($k) ?>"><?= $e ?> <?= h($l) ?></option><?php endforeach; ?></select>
-    <button>＋</button>
-  </form>
-  <div id="list"></div>
-  <button id="clear" class="ghost" hidden>Supprimer les articles cochés</button>
+  <section id="buy">
+    <form class="row" data-add><input list="known" placeholder="Ajouter un produit…" autocomplete="off" required><button>＋</button></form>
+    <datalist id="known"></datalist>
+    <div class="list"></div>
+  </section>
+  <section id="stock" hidden>
+    <input class="search" placeholder="Rechercher un produit…" type="search">
+    <div class="list"></div>
+  </section>
+  <section id="plats" hidden>
+    <form class="stack" id="recipe-form">
+      <input name="name" placeholder="Nom du plat (ex : Lasagnes)" required>
+      <textarea name="ingredients" rows="3" placeholder="Ingrédients, un par ligne ou séparés par des virgules"></textarea>
+      <button>Enregistrer le plat</button>
+    </form>
+    <div class="list"></div>
+  </section>
+  <section id="import" hidden>
+    <p class="hint">Colle ici le détail d'une commande (Carrefour Drive, ticket, mail…), un produit par ligne. Je retire les prix et quantités, tu vérifies, puis tout passe en « on en a ».</p>
+    <textarea id="paste" rows="8" placeholder="Lait demi-écrémé 1L x2&#10;Pâtes spaghetti 500g&#10;…"></textarea>
+    <button id="parse" class="plain">Analyser</button>
+    <div class="list" id="preview"></div>
+    <button id="confirm-import" hidden>Ajouter au placard</button>
+  </section>
 </main>
-<script>window.CSRF = <?= json_encode(csrf()) ?>; window.AISLES = <?= json_encode(aisles(), JSON_UNESCAPED_UNICODE) ?>;</script>
-<script src="assets/app.js?v=1"></script>
+<script>window.CSRF = <?= json_encode(csrf()) ?>;</script>
+<script src="assets/app.js?v=2"></script>
 </body></html>

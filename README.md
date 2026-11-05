@@ -1,4 +1,5 @@
 # Liste de courses
 
-App PHP/MySQL partagée à deux. Installation : crée une base MySQL dans cPanel, copie `config.sample.php` en `config.php`
-(remplis la base, les prénoms et le hash du mot de passe), puis déploie via `.cpanel.yml`. La table se crée toute seule.
+App PHP/MySQL partagée à deux : liste « à acheter », placard (ce qu'on a / ce qui manque), plats avec vérification des
+ingrédients, import du détail d'une commande. Installation : crée une base MySQL dans cPanel, copie `config.sample.php`
+en `config.php`, puis déploie via `.cpanel.yml`. Les tables se créent toutes seules.

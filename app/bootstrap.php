@@ -41,15 +41,22 @@ function db(): PDO
         $pdo = new PDO(sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', $c['host'] ?? 'localhost', $c['name'] ?? ''), $c['user'] ?? '', $c['password'] ?? '', $opts);
         $auto = 'INT AUTO_INCREMENT PRIMARY KEY';
     }
-    $pdo->exec("CREATE TABLE IF NOT EXISTS items (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS products (
         id $auto,
         name VARCHAR(160) NOT NULL,
-        qty VARCHAR(40) NOT NULL DEFAULT '',
-        aisle VARCHAR(40) NOT NULL DEFAULT 'autre',
-        done TINYINT NOT NULL DEFAULT 0,
-        added_by VARCHAR(40) NOT NULL DEFAULT '',
-        created_at VARCHAR(19) NOT NULL,
-        done_at VARCHAR(19) NULL
+        name_key VARCHAR(160) NOT NULL UNIQUE,
+        status VARCHAR(8) NOT NULL DEFAULT 'out',
+        times_bought INT NOT NULL DEFAULT 0,
+        last_bought VARCHAR(10) NULL
+    )");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS recipes (
+        id $auto,
+        name VARCHAR(160) NOT NULL
+    )");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS recipe_items (
+        recipe_id INT NOT NULL,
+        product_id INT NOT NULL,
+        PRIMARY KEY (recipe_id, product_id)
     )");
     return $pdo;
 }
@@ -61,20 +68,17 @@ function q(string $sql, array $p = []): PDOStatement
     return $st;
 }
 
-/** Rayons : clé => [libellé, emoji] (l'ordre = ordre d'affichage). */
-function aisles(): array
+/** Retourne l'id du produit portant ce nom (le crée au besoin avec le statut donné). */
+function product_id(string $name, string $status = 'out'): int
 {
-    return [
-        'fruits'   => ['Fruits & légumes', '🥦'],
-        'boucherie' => ['Viande & poisson', '🥩'],
-        'cremerie' => ['Crèmerie', '🧀'],
-        'boulangerie' => ['Boulangerie', '🥖'],
-        'epicerie' => ['Épicerie', '🥫'],
-        'surgeles' => ['Surgelés', '🧊'],
-        'boissons' => ['Boissons', '🥤'],
-        'hygiene'  => ['Hygiène & maison', '🧴'],
-        'autre'    => ['Autre', '📦'],
-    ];
+    $name = mb_substr(trim(preg_replace('/\s+/', ' ', $name)), 0, 160);
+    $key = mb_strtolower($name);
+    $id = q('SELECT id FROM products WHERE name_key = ?', [$key])->fetchColumn();
+    if ($id) {
+        return (int) $id;
+    }
+    q('INSERT INTO products (name, name_key, status) VALUES (?,?,?)', [$name, $key, $status]);
+    return (int) db()->lastInsertId();
 }
 
 function csrf(): string

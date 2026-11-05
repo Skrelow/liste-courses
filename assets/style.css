@@ -5,10 +5,7 @@ body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.4 system-ui
 header { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; padding-top:calc(14px + env(safe-area-inset-top)); }
 header h1 { margin:0; font-size:20px; } header span { color:var(--muted); font-size:13px; } header a { color:var(--green); }
 main { max-width:560px; margin:0 auto; padding:0 16px 40px; }
-#add { display:grid; grid-template-columns:1fr 64px; gap:8px; margin-bottom:16px; }
-#add #aisle { grid-column:1 / 2; } #add button { grid-column:2; grid-row:1 / 3; }
 input, select { font:inherit; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--card); color:var(--ink); min-width:0; }
-#add .qty { display:none; }
 button { font:inherit; border:0; border-radius:12px; background:var(--green); color:#fff; font-size:24px; cursor:pointer; }
 button.ghost { background:none; color:var(--muted); font-size:14px; width:100%; margin-top:16px; padding:12px; }
 .aisle { margin:18px 0 6px; font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
@@ -19,3 +16,15 @@ button.ghost { background:none; color:var(--muted); font-size:14px; width:100%; 
 .empty { text-align:center; color:var(--muted); margin-top:40px; }
 .login { max-width:320px; margin:20vh auto; padding:0 16px; text-align:center; }
 .login form { display:grid; gap:10px; } .login button { font-size:16px; padding:12px; } .err { color:#c0392b; }
+#tabs { display:flex; gap:6px; max-width:560px; margin:0 auto 14px; padding:0 16px; overflow-x:auto; }
+#tabs button { flex:1; font-size:14px; padding:10px 8px; background:var(--card); color:var(--muted); border:1px solid var(--line); white-space:nowrap; }
+#tabs button.on { background:var(--green); color:#fff; border-color:var(--green); }
+.row { display:flex; gap:8px; flex-wrap:wrap; } .row input { flex:1; } .row > button { width:56px; }
+.stack { display:grid; gap:8px; margin-bottom:12px; }
+textarea { font:inherit; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--card); color:var(--ink); width:100%; resize:vertical; }
+.stack button, button.plain, #confirm-import { font-size:15px; padding:12px; width:auto; }
+button.plain { background:var(--card); color:var(--ink); border:1px solid var(--line); }
+.search { width:100%; margin-bottom:10px; } .hint { color:var(--muted); font-size:14px; }
+.pill { font-size:13px; padding:6px 12px; border-radius:99px; } .pill.ok { background:#dff0e4; color:#1f5a38; } .pill.ko { background:#f7dcd8; color:#9a2d20; }
+.recipe-head { cursor:pointer; } .detail { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin:-2px 0 8px; display:grid; gap:4px; }
+.detail .row { margin-top:8px; } #confirm-import { margin-top:12px; width:100%; }
