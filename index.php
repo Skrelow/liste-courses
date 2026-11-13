@@ -10,7 +10,7 @@ $user = require_login();
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="assets/icon.svg">
 <link rel="apple-touch-icon" href="assets/icon.svg">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=4">
 </head><body>
 <header><h1>🛒 Courses</h1><span><?= h($user) ?> · <a href="logout.php">Quitter</a></span></header>
 <nav id="tabs">
@@ -18,7 +18,7 @@ $user = require_login();
 </nav>
 <main>
   <section id="buy">
-    <form class="row" data-add><input list="known" placeholder="Ajouter un produit…" autocomplete="off" required><button>＋</button></form>
+    <form class="row" data-add><input list="known" placeholder="Ajouter un produit… (ex : lait x2)" autocomplete="off" required><button>＋</button></form>
     <datalist id="known"></datalist>
     <div class="list"></div>
   </section>
@@ -42,6 +42,12 @@ $user = require_login();
     <button id="confirm-import" hidden>Ajouter au placard</button>
   </section>
 </main>
-<script>window.CSRF = <?= json_encode(csrf()) ?>;</script>
-<script src="assets/app.js?v=2"></script>
+<div id="net" hidden></div>
+<div id="toast" hidden><span></span><button type="button">Annuler</button></div>
+<script>
+window.CSRF = <?= json_encode(csrf()) ?>;
+window.USER = <?= json_encode($user, JSON_UNESCAPED_UNICODE) ?>;
+window.AISLES = <?= json_encode(array_map(fn($a) => $a[0], aisles()), JSON_UNESCAPED_UNICODE) ?>;
+</script>
+<script src="assets/app.js?v=4"></script>
 </body></html>

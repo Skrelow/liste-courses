@@ -28,3 +28,14 @@ button.plain { background:var(--card); color:var(--ink); border:1px solid var(--
 .pill { font-size:13px; padding:6px 12px; border-radius:99px; } .pill.ok { background:#dff0e4; color:#1f5a38; } .pill.ko { background:#f7dcd8; color:#9a2d20; }
 .recipe-head { cursor:pointer; } .detail { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin:-2px 0 8px; display:grid; gap:4px; }
 .detail .row { margin-top:8px; } #confirm-import { margin-top:12px; width:100%; }
+h2.aisle { margin:16px 0 6px; } h2.aisle:first-child { margin-top:4px; }
+.item .n { cursor:pointer; } .item .qty { color:var(--green); font-weight:600; margin-left:4px; }
+.item .note { display:block; }
+.who { flex:none; width:24px; height:24px; border-radius:50%; background:var(--line); color:var(--muted); font-size:12px; font-weight:600; display:grid; place-items:center; }
+.detail.edit { margin:-2px 0 10px; gap:10px; } .edit label { display:grid; gap:4px; font-size:13px; color:var(--muted); flex:1; }
+.edit input, .edit select { width:100%; } .edit .row > button { font-size:15px; padding:10px 16px; width:auto; }
+#toast, #net { position:fixed; left:50%; transform:translateX(-50%); max-width:calc(100% - 32px); border-radius:12px; font-size:14px; z-index:10; }
+#toast { bottom:calc(16px + env(safe-area-inset-bottom)); display:flex; align-items:center; gap:14px; background:var(--ink); color:var(--bg); padding:10px 10px 10px 16px; box-shadow:0 4px 16px rgba(0,0,0,.2); }
+#toast button { background:none; color:#8fd3a8; font-size:14px; font-weight:600; padding:6px 8px; }
+#net { top:calc(8px + env(safe-area-inset-top)); background:#f3e6c4; color:#6b5210; padding:6px 12px; }
+[hidden] { display:none !important; }

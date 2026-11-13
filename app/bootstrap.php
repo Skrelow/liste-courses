@@ -58,7 +58,74 @@ function db(): PDO
         product_id INT NOT NULL,
         PRIMARY KEY (recipe_id, product_id)
     )");
+    migrate($pdo);
     return $pdo;
+}
+
+/** Ajoute les colonnes apparues après la première version (rayon, quantité, note, qui l'a ajouté). */
+function migrate(PDO $pdo): void
+{
+    $sqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+    $cols = array_column($pdo->query($sqlite ? 'PRAGMA table_info(products)' : 'SHOW COLUMNS FROM products')->fetchAll(), $sqlite ? 'name' : 'Field');
+    $wanted = [
+        'category' => 'VARCHAR(20) NULL',
+        'qty' => "VARCHAR(20) NOT NULL DEFAULT ''",
+        'note' => "VARCHAR(160) NOT NULL DEFAULT ''",
+        'added_by' => 'VARCHAR(40) NULL',
+    ];
+    foreach ($wanted as $col => $def) {
+        if (!in_array($col, $cols, true)) {
+            $pdo->exec("ALTER TABLE products ADD COLUMN $col $def");
+        }
+    }
+    if (!in_array('category', $cols, true)) {
+        $up = $pdo->prepare('UPDATE products SET category = ? WHERE id = ?');
+        foreach ($pdo->query('SELECT id, name FROM products')->fetchAll() as $p) {
+            $up->execute([guess_aisle($p['name']), $p['id']]);
+        }
+    }
+}
+
+/** Rayons dans l'ordre d'un parcours de magasin, avec des mots-clés pour deviner le rayon d'un produit. */
+function aisles(): array
+{
+    return [
+        'fruits' => ['Fruits & légumes', 'fruit, légume, pomme, poire, banane, orange, citron, clémentine, mandarine, pamplemousse, kiwi, fraise, framboise, myrtille, raisin, melon, pastèque, pêche, nectarine, abricot, prune, cerise, ananas, mangue, avocat, tomate, salade, laitue, mâche, roquette, carotte, oignon, ail, échalote, pomme de terre, pommes de terre, patate, courgette, aubergine, poivron, concombre, champignon, brocoli, chou, chou-fleur, épinard, haricots verts, poireau, navet, radis, betterave, céleri, fenouil, persil, coriandre, basilic, menthe, ciboulette, gingembre, courge, potiron, butternut'],
+        'pain' => ['Pain & viennoiseries', 'pain, baguette, brioche, croissant, pain au chocolat, viennoiserie, biscotte, wrap, tortilla, pita'],
+        'frais' => ['Crèmerie & frais', 'lait, yaourt, yogourt, skyr, fromage, fromage blanc, beurre, crème, crème fraîche, oeuf, emmental, gruyère, comté, mozzarella, parmesan, feta, chèvre, camembert, raclette, ricotta, mascarpone, jambon, lardon, bacon, chorizo, saucisson, rillettes, pâté, surimi, houmous, gnocchi, ravioli, tortellini, flan, pâte feuilletée, pâte brisée, pâte à pizza'],
+        'viande' => ['Viande & poisson', 'viande, poulet, dinde, boeuf, veau, porc, agneau, canard, steak, steak haché, viande hachée, escalope, côte, côtelette, rôti, saucisse, merguez, chipolata, filet, cuisse, poisson, saumon, cabillaud, colin, truite, crevette, moule'],
+        'epicerie' => ['Épicerie salée', 'pâte, spaghetti, tagliatelle, penne, coquillette, riz, semoule, couscous, quinoa, boulgour, lentille, pois chiche, haricot, farine, maïzena, huile, vinaigre, sel, poivre, épice, curry, paprika, cumin, moutarde, ketchup, mayonnaise, sauce, sauce tomate, pesto, bouillon, soupe, conserve, thon, sardine, maquereau, maïs, olive, cornichon, chips, cacahuète, apéritif, crackers, purée, tomates concassées, concentré de tomate'],
+        'sucre' => ['Sucré & petit-déj', "sucre, chocolat, café, thé, tisane, infusion, cacao, céréale, muesli, flocons d'avoine, confiture, miel, biscuit, gâteau, madeleine, nutella, pâte à tartiner, compote, bonbon, levure, crêpe"],
+        'boissons' => ['Boissons', "eau, eau gazeuse, jus, jus d'orange, soda, coca, limonade, sirop, bière, vin, rosé, champagne, ice tea, perrier"],
+        'surgeles' => ['Surgelés', 'surgelé, glace, sorbet, frites, pizza, poisson pané, nuggets'],
+        'hygiene' => ['Hygiène & beauté', 'shampoing, shampooing, après-shampoing, gel douche, savon, dentifrice, brosse à dents, déodorant, déo, coton, coton-tige, rasoir, mouchoir, papier toilette, serviette hygiénique, tampon, crème solaire, crème hydratante'],
+        'entretien' => ['Maison & entretien', 'lessive, adoucissant, liquide vaisselle, pastille lave-vaisselle, tablette lave-vaisselle, éponge, sac poubelle, essuie-tout, sopalin, javel, nettoyant, vinaigre blanc, papier alu, papier aluminium, film alimentaire, papier cuisson, allumette, ampoule, pile'],
+        'autre' => ['Autre', ''],
+    ];
+}
+
+function fold(string $s): string
+{
+    $s = strtr(mb_strtolower($s), ['é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e', 'à' => 'a', 'â' => 'a', 'î' => 'i', 'ï' => 'i', 'ô' => 'o', 'ù' => 'u', 'û' => 'u', 'ç' => 'c', 'œ' => 'oe']);
+    return trim(preg_replace('/[^a-z0-9]+/', ' ', $s));
+}
+
+/** Rayon le plus probable : celui dont le mot-clé trouvé dans le nom est le plus long (« crème solaire » bat « crème »). */
+function guess_aisle(string $name): string
+{
+    $name = ' ' . fold($name) . ' ';
+    $best = 'autre';
+    $bestLen = 0;
+    foreach (aisles() as $key => [, $kw]) {
+        foreach (explode(',', $kw) as $w) {
+            $w = fold($w);
+            if ($w !== '' && strlen($w) > $bestLen && preg_match('/ ' . preg_quote($w, '/') . '[sx]? /', $name)) {
+                $best = $key;
+                $bestLen = strlen($w);
+            }
+        }
+    }
+    return $best;
 }
 
 function q(string $sql, array $p = []): PDOStatement
@@ -77,7 +144,7 @@ function product_id(string $name, string $status = 'out'): int
     if ($id) {
         return (int) $id;
     }
-    q('INSERT INTO products (name, name_key, status) VALUES (?,?,?)', [$name, $key, $status]);
+    q('INSERT INTO products (name, name_key, status, category) VALUES (?,?,?,?)', [$name, $key, $status, guess_aisle($name)]);
     return (int) db()->lastInsertId();
 }
 
