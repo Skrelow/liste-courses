@@ -78,10 +78,12 @@ function migrate(PDO $pdo): void
             'ean' => 'VARCHAR(20) NULL',
             'format' => "VARCHAR(40) NOT NULL DEFAULT ''",
             'usual_rank' => 'INT NULL', // rang dans les achats fréquents Carrefour (NULL = pas un habituel)
+            'price_cents' => 'INT NULL', // prix estimé d'un article, en centimes
         ],
         'recipes' => [
             'source_url' => 'VARCHAR(500) NULL',
             'servings' => 'VARCHAR(40) NULL',
+            'image_url' => 'VARCHAR(500) NULL',
         ],
         'recipe_items' => [
             'qty' => "VARCHAR(40) NOT NULL DEFAULT ''",
@@ -108,16 +110,16 @@ function migrate(PDO $pdo): void
 function aisles(): array
 {
     return [
-        'fruits' => ['Fruits & légumes', 'fruit, légume, pomme, poire, banane, orange, citron, clémentine, mandarine, pamplemousse, kiwi, fraise, framboise, myrtille, raisin, melon, pastèque, pêche, nectarine, abricot, prune, cerise, ananas, mangue, avocat, tomate, salade, laitue, mâche, roquette, carotte, oignon, ail, échalote, pomme de terre, pommes de terre, patate, courgette, aubergine, poivron, concombre, champignon, brocoli, chou, chou-fleur, épinard, haricots verts, poireau, navet, radis, betterave, céleri, fenouil, persil, coriandre, basilic, menthe, ciboulette, gingembre, courge, potiron, butternut, asperge, poêlée de légumes'],
+        'fruits' => ['Fruits & légumes', 'pomme, poire, banane, orange, citron, clémentine, mandarine, pamplemousse, kiwi, fraise, framboise, myrtille, raisin, melon, pastèque, pêche, nectarine, abricot, prune, cerise, ananas, mangue, avocat, tomate, salade, laitue, mâche, roquette, carotte, oignon, ail, échalote, pomme de terre, pommes de terre, patate, courgette, aubergine, poivron, concombre, champignon, brocoli, chou, chou-fleur, épinard, haricots verts, poireau, navet, radis, betterave, céleri, fenouil, persil, coriandre, basilic, menthe, ciboulette, gingembre, courge, potiron, butternut, asperge, poêlée de légumes'],
         'pain' => ['Pain & viennoiseries', 'pain, baguette, brioche, croissant, pain au chocolat, viennoiserie, biscotte, wrap, tortilla, pita, burger, pain burger, muffin'],
-        'frais' => ['Crèmerie & frais', 'lait, yaourt, yogourt, skyr, fromage, fromage blanc, beurre, crème, crème fraîche, oeuf, emmental, gruyère, comté, mozzarella, parmesan, feta, chèvre, camembert, raclette, ricotta, mascarpone, jambon, lardon, bacon, chorizo, saucisson, rillettes, pâté, surimi, houmous, gnocchi, ravioli, tortellini, flan, pâte feuilletée, pâte brisée, pâte à pizza, charcuterie, burrata, margarine, poitrine fumée, raviole, tarama, sushi, parmigiano, dessert fruitier, crème dessert, liégeois, mousse au chocolat'],
+        'frais' => ['Crèmerie & frais', 'lait, yaourt, yogourt, skyr, fromage, fromage blanc, beurre, crème, crème fraîche, oeuf, emmental, gruyère, comté, mozzarella, parmesan, feta, chèvre, camembert, raclette, ricotta, mascarpone, jambon, lardon, bacon, chorizo, saucisson, rillettes, pâté, surimi, houmous, gnocchi, ravioli, tortellini, flan, pâte feuilletée, pâte brisée, pâte à pizza, charcuterie, burrata, margarine, poitrine fumée, raviole, tarama, sushi, parmigiano, dessert fruitier, taboulé, salade taboulé, crème dessert, liégeois, mousse au chocolat'],
         'viande' => ['Viande & poisson', 'viande, poulet, dinde, boeuf, veau, porc, agneau, canard, steak, steak haché, viande hachée, escalope, côte, côtelette, rôti, saucisse, merguez, chipolata, filet, cuisse, poisson, saumon, cabillaud, colin, truite, crevette, moule, gambas'],
         'epicerie' => ['Épicerie salée', 'pâte, spaghetti, tagliatelle, penne, coquillette, riz, semoule, couscous, quinoa, boulgour, lentille, pois chiche, haricot, farine, maïzena, huile, vinaigre, sel, poivre, épice, curry, paprika, cumin, moutarde, ketchup, mayonnaise, sauce, sauce tomate, pesto, bouillon, soupe, conserve, thon, sardine, maquereau, maïs, olive, cornichon, chips, cacahuète, apéritif, crackers, purée, tomates concassées, concentré de tomate, amande, pistache, noix de cajou, chapelure, cannelle, piment, graine, nouille, fajitas, kit fajitas, wasabi, sauce soja'],
-        'sucre' => ['Sucré & petit-déj', "sucre, chocolat, café, thé, tisane, infusion, cacao, céréale, muesli, flocons d'avoine, confiture, miel, biscuit, gâteau, madeleine, nutella, pâte à tartiner, compote, bonbon, levure, crêpe, cassonade, spéculoos, noix de coco râpée"],
+        'sucre' => ['Sucré & petit-déj', "sucre, chocolat, café, thé, tisane, infusion, cacao, céréale, muesli, flocons d'avoine, confiture, miel, biscuit, gâteau, madeleine, nutella, pâte à tartiner, compote, bonbon, levure, crêpe, cassonade, spéculoos, noix de coco râpée, chewing-gum, chewing gum, tablette de chocolat, framboises enrobées, barre, barre céréales"],
         'boissons' => ['Boissons', "eau, eau gazeuse, jus, jus d'orange, soda, coca, limonade, sirop, bière, vin, rosé, champagne, ice tea, perrier, boisson, boisson végétale, kombucha, boisson énergisante"],
         'surgeles' => ['Surgelés', 'surgelé, glace, sorbet, frites, pizza, poisson pané, nuggets, poêlée'],
         'hygiene' => ['Hygiène & beauté', 'shampoing, shampooing, après-shampoing, gel douche, savon, dentifrice, brosse à dents, déodorant, déo, coton, coton-tige, rasoir, mouchoir, papier toilette, serviette hygiénique, tampon, crème solaire, crème hydratante, démaquillant, brossette, mousse coiffante, coton-tige'],
-        'entretien' => ['Maison & entretien', 'lessive, adoucissant, liquide vaisselle, pastille lave-vaisselle, tablette lave-vaisselle, éponge, sac poubelle, essuie-tout, sopalin, javel, nettoyant, vinaigre blanc, papier alu, papier aluminium, film alimentaire, papier cuisson, allumette, ampoule, pile, bicarbonate, désodorisant, gel wc, lingette, liquide de rinçage, parfum de linge, tablette, détartrant'],
+        'entretien' => ['Maison & entretien', 'lessive, adoucissant, liquide vaisselle, pastille lave-vaisselle, tablette lave-vaisselle, éponge, sac poubelle, essuie-tout, sopalin, javel, nettoyant, vinaigre blanc, papier alu, papier aluminium, film alimentaire, papier cuisson, allumette, ampoule, pile, bicarbonate, désodorisant, gel wc, lingette, liquide de rinçage, parfum de linge, tablettes activateur, activateur linge, détartrant'],
         'animaux' => ['Animaux', 'chat, chien, pour chat, pour chien, litière, croquette, pâtée, herbe à chat'],
         'autre' => ['Autre', ''],
     ];
@@ -129,18 +131,29 @@ function fold(string $s): string
     return trim(preg_replace('/[^a-z0-9]+/', ' ', $s));
 }
 
-/** Rayon le plus probable : celui dont le mot-clé trouvé dans le nom est le plus long (« crème solaire » bat « crème »). */
+/**
+ * Rayon le plus probable. Le premier mot d'un nom dit ce qu'est le produit (« Chips… pommes de terre », « Soda au citron ») :
+ * un mot-clé en tête de nom l'emporte ; sinon le mot-clé le plus long (« crème solaire » bat « crème »). Pluriels acceptés.
+ */
 function guess_aisle(string $name): string
 {
     $name = ' ' . fold($name) . ' ';
     $best = 'autre';
-    $bestLen = 0;
+    $bestScore = 0;
     foreach (aisles() as $key => [, $kw]) {
         foreach (explode(',', $kw) as $w) {
             $w = fold($w);
-            if ($w !== '' && strlen($w) > $bestLen && preg_match('/ ' . preg_quote($w, '/') . '[sx]? /', $name)) {
+            if ($w === '') {
+                continue;
+            }
+            $re = implode(' ', array_map(fn($x) => preg_quote($x, '/') . '[sx]?', explode(' ', $w)));
+            if (!preg_match('/ ' . $re . ' /', $name, $m, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+            $score = strlen($w) + ($m[0][1] === 0 ? 100 : 0);
+            if ($score > $bestScore) {
                 $best = $key;
-                $bestLen = strlen($w);
+                $bestScore = $score;
             }
         }
     }
@@ -175,6 +188,12 @@ function csrf(): string
 function current_user(): ?string
 {
     return $_SESSION['user'] ?? null;
+}
+
+/** Celui qui gère l'appli (placard, imports) : 'admin' dans config.php, sinon le premier prénom. */
+function is_admin(?string $user): bool
+{
+    return $user !== null && $user === (string) cfg('admin', ((array) cfg('users', []))[0] ?? '');
 }
 
 function require_login(bool $json = false): string

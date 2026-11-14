@@ -104,7 +104,12 @@ function fetch_recipe(string $url): ?array
         $recipe = find_recipe_node(json_decode(html_entity_decode(trim($json), ENT_QUOTES, 'UTF-8'), true) ?? json_decode(trim($json), true));
         if ($recipe && !empty($recipe['recipeIngredient'])) {
             $yield = $recipe['recipeYield'] ?? '';
+            $img = $recipe['image'] ?? '';
+            while (is_array($img)) { // chaîne, liste de chaînes ou objet ImageObject {url}
+                $img = $img['url'] ?? ($img[0] ?? '');
+            }
             return [
+                'image' => preg_match('#^https://\S{5,490}$#', (string) $img) ? (string) $img : '',
                 'name' => mb_substr(trim(html_entity_decode((string) ($recipe['name'] ?? 'Recette'), ENT_QUOTES, 'UTF-8')), 0, 160),
                 'ingredients' => array_values(array_filter(array_map(fn($i) => trim(html_entity_decode((string) $i, ENT_QUOTES, 'UTF-8')), (array) $recipe['recipeIngredient']))),
                 'servings' => mb_substr(trim(is_array($yield) ? (string) ($yield[0] ?? '') : (string) $yield), 0, 40),

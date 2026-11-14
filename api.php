@@ -16,8 +16,8 @@ function out($data, int $code = 200): void
 /** statut : stock = on en a, buy = à acheter, out = on n'en a plus / on ne sait pas. */
 function snapshot(): array
 {
-    $products = q('SELECT id, name, status, category, qty, note, added_by, shop_url, image_url, format, usual_rank, times_bought, last_bought FROM products ORDER BY name_key')->fetchAll();
-    $recipes = q('SELECT id, name, source_url, servings FROM recipes ORDER BY name')->fetchAll();
+    $products = q('SELECT id, name, status, category, qty, note, added_by, shop_url, image_url, format, usual_rank, price_cents, times_bought, last_bought FROM products ORDER BY name_key')->fetchAll();
+    $recipes = q('SELECT id, name, source_url, servings, image_url FROM recipes ORDER BY name')->fetchAll();
     $links = q('SELECT recipe_id, product_id, qty FROM recipe_items')->fetchAll();
     foreach ($recipes as &$r) {
         $mine = array_values(array_filter($links, fn($l) => (int) $l['recipe_id'] === (int) $r['id']));
@@ -46,12 +46,12 @@ function import_catalog(array $items): void
         $ean = preg_match('/^\d{6,14}$/', (string) ($it['ean'] ?? '')) ? (string) $it['ean'] : null;
         $id = $ean ? q('SELECT id FROM products WHERE ean = ?', [$ean])->fetchColumn() : false;
         $id = $id ?: product_id($name);
-        q('UPDATE products SET ean = COALESCE(?, ean), shop_url = COALESCE(?, shop_url), image_url = COALESCE(?, image_url), format = ?, usual_rank = ? WHERE id = ?', [
-            $ean, $https($it['url'] ?? ''), $https($it['image'] ?? ''), mb_substr(trim((string) ($it['format'] ?? '')), 0, 40), $rank + 1, $id,
+        q('UPDATE products SET ean = COALESCE(?, ean), shop_url = COALESCE(?, shop_url), image_url = COALESCE(?, image_url), format = ?, usual_rank = ?, price_cents = COALESCE(?, price_cents) WHERE id = ?', [
+            $ean, $https($it['url'] ?? ''), $https($it['image'] ?? ''), mb_substr(trim((string) ($it['format'] ?? '')), 0, 40), $rank + 1, is_numeric($it['price'] ?? null) && $it['price'] > 0 ? (int) round($it['price'] * 100) : null, $id,
         ]);
     }
-    // les mots-clés des rayons s'enrichissent : on retente les produits restés en « Autre »
-    foreach (q("SELECT id, name FROM products WHERE category = 'autre' OR category IS NULL")->fetchAll() as $p) {
+    // les mots-clés des rayons s'enrichissent : on reclasse les habituels et les produits restés en « Autre »
+    foreach (q("SELECT id, name FROM products WHERE usual_rank IS NOT NULL OR category = 'autre' OR category IS NULL")->fetchAll() as $p) {
         q('UPDATE products SET category = ? WHERE id = ?', [guess_aisle($p['name']), $p['id']]);
     }
     db()->commit();
@@ -123,6 +123,10 @@ switch ($action) {
             $url = trim((string) $in['shop_url']);
             q('UPDATE products SET shop_url = ? WHERE id = ?', [preg_match('#^https://\S{5,490}$#', $url) ? $url : null, $id]);
         }
+        if (array_key_exists('price', $in)) { // prix estimé en euros (« 2,49 ») ; vide = inconnu
+            $p = (float) str_replace(',', '.', preg_replace('/[^\d,.]/', '', (string) $in['price']));
+            q('UPDATE products SET price_cents = ? WHERE id = ?', [$p > 0 && $p < 1000 ? (int) round($p * 100) : null, $id]);
+        }
         if ($name !== '') {
             $name = mb_substr(preg_replace('/\s+/', ' ', $name), 0, 160);
             $other = q('SELECT id FROM products WHERE name_key = ? AND id <> ?', [mb_strtolower($name), $id])->fetchColumn();
@@ -143,6 +147,23 @@ switch ($action) {
             $last,
             $id,
         ]);
+        break;
+    case 'all_bought': // « Courses faites » : tout ce qui était à acheter passe en acheté
+        q("UPDATE products SET status = 'stock', qty = '', added_by = NULL, times_bought = times_bought + 1, last_bought = ? WHERE status = 'buy'", [date('Y-m-d')]);
+        break;
+    case 'restore_many': // annule « Courses faites » : [{id, fields}, …]
+        foreach (array_slice((array) ($in['items'] ?? []), 0, 500) as $it) {
+            $f = (array) ($it['fields'] ?? []);
+            $last = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($f['last_bought'] ?? '')) ? $f['last_bought'] : null;
+            q('UPDATE products SET status = ?, qty = ?, added_by = ?, times_bought = ?, last_bought = ? WHERE id = ?', [
+                in_array($f['status'] ?? '', ['stock', 'buy', 'out'], true) ? $f['status'] : 'out',
+                mb_substr((string) ($f['qty'] ?? ''), 0, 20),
+                ($f['added_by'] ?? null) !== null ? mb_substr((string) $f['added_by'], 0, 40) : null,
+                max(0, (int) ($f['times_bought'] ?? 0)),
+                $last,
+                (int) ($it['id'] ?? 0),
+            ]);
+        }
         break;
     case 'delete_product':
         q('DELETE FROM recipe_items WHERE product_id = ?', [$id]);
@@ -170,10 +191,12 @@ switch ($action) {
         $src = trim((string) ($in['source_url'] ?? ''));
         $src = preg_match('#^https?://\S{5,490}$#', $src) ? $src : null;
         $servings = mb_substr(trim((string) ($in['servings'] ?? '')), 0, 40) ?: null;
+        $rimg = trim((string) ($in['image_url'] ?? ''));
+        $rimg = preg_match('#^https://\S{5,490}$#', $rimg) ? $rimg : null; // photo du plat
         if ($id) {
-            q('UPDATE recipes SET name = ?, source_url = COALESCE(?, source_url), servings = COALESCE(?, servings) WHERE id = ?', [mb_substr($name, 0, 160), $src, $servings, $id]);
+            q('UPDATE recipes SET name = ?, source_url = COALESCE(?, source_url), servings = COALESCE(?, servings), image_url = COALESCE(?, image_url) WHERE id = ?', [mb_substr($name, 0, 160), $src, $servings, $rimg, $id]);
         } else {
-            q('INSERT INTO recipes (name, source_url, servings) VALUES (?,?,?)', [mb_substr($name, 0, 160), $src, $servings]);
+            q('INSERT INTO recipes (name, source_url, servings, image_url) VALUES (?,?,?,?)', [mb_substr($name, 0, 160), $src, $servings, $rimg]);
             $id = (int) db()->lastInsertId();
         }
         save_recipe_items($id, (array) ($in['ingredients'] ?? []));

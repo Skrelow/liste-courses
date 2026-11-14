@@ -1,6 +1,6 @@
 // Mode hors ligne : la page et la liste restent consultables sans réseau (magasin, cave…).
-const CACHE = 'courses-v10';
-const ASSETS = ['assets/style.css?v=10', 'assets/app.js?v=10', 'assets/icon.svg', 'manifest.json'];
+const CACHE = 'courses-v14';
+const ASSETS = ['assets/style.css?v=14', 'assets/app.js?v=14', 'assets/icon.svg', 'manifest.json'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
