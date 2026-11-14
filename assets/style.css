@@ -102,3 +102,12 @@ button.wide { width:100%; font-size:15px; padding:12px; margin:8px 0; }
   .item .tick { border-color:#4a5544; }
   .who { background:#3a4535; color:#cfd8c9; }
 }
+/* v16 : caddie, notifications */
+.item.got { opacity:.5; } .item.got .nm { text-decoration:line-through; } .item.got .thumb { filter:grayscale(1); }
+h2.aisle.got-title { color:var(--green); }
+header span { display:flex; align-items:center; gap:6px; }
+.bell { background:none; font-size:18px; padding:2px 4px; line-height:1; }
+.hint-bar { display:flex; align-items:center; gap:8px; margin:10px 0 0; padding:8px 8px 8px 12px; border-radius:12px; background:#dff0e4; color:#1f5a38; font-size:14px; }
+.hint-bar span { flex:1; } .hint-bar button { width:auto; font-size:14px; padding:8px 12px; }
+.hint-bar .x { background:none; color:#1f5a38; padding:4px 8px; }
+@media (prefers-color-scheme: dark) { .hint-bar { background:#23402d; color:#cfe9d7; } .hint-bar .x { color:#cfe9d7; } }

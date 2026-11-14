@@ -26,6 +26,8 @@ const ago = (d) => (d ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric'
 const today = () => new Date().toISOString().slice(0, 10);
 const initial = (u) => (u ? u.trim().charAt(0).toUpperCase() : '');
 const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
+/** Dans la liste : à acheter (buy) ou déjà dans le caddie (got) */
+const listed = (p) => p.status === 'buy' || p.status === 'got';
 /** minuscules sans accents, pour chercher « creme » et trouver « Crème » */
 const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/œ/g, 'oe').replace(/æ/g, 'ae').toLowerCase();
 const img = (url, cls = '') => (url ? `<img${cls ? ` class="${cls}"` : ''} src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '');
@@ -92,10 +94,10 @@ function applyLocal(b) {
       break;
     }
     case 'set_status':
-      if (p) Object.assign(p, b.status === 'buy' ? { status: 'buy', added_by: window.USER } : { status: b.status, qty: '', added_by: null });
+      if (p) Object.assign(p, b.status === 'buy' ? { status: 'buy', added_by: p.added_by || window.USER } : b.status === 'got' ? { status: 'got' } : { status: b.status, qty: '', added_by: null });
       break;
-    case 'bought':
-      if (p) Object.assign(p, { status: 'stock', qty: '', added_by: null, times_bought: +p.times_bought + 1, last_bought: today() });
+    case 'bought': // coché : dans le caddie, validé par « Courses faites »
+      if (p) p.status = 'got';
       break;
     case 'update_product':
       if (p) {
@@ -107,9 +109,11 @@ function applyLocal(b) {
     case 'restore':
       if (p) Object.assign(p, b.fields);
       break;
-    case 'all_bought':
-      data.products.filter((x) => x.status === 'buy').forEach((x) => Object.assign(x, { status: 'stock', qty: '', added_by: null, times_bought: +x.times_bought + 1, last_bought: today() }));
+    case 'all_bought': { // le caddie ; si rien n'est coché, toute la liste
+      const from = data.products.some((x) => x.status === 'got') ? ['got'] : ['buy', 'got'];
+      data.products.filter((x) => from.includes(x.status)).forEach((x) => Object.assign(x, { status: 'stock', qty: '', added_by: null, times_bought: +x.times_bought + 1, last_bought: today() }));
       break;
+    }
     case 'restore_many':
       b.items.forEach((it) => { const x = byId(it.id); if (x) Object.assign(x, it.fields); });
       break;
@@ -162,11 +166,21 @@ async function flush() {
 }
 
 /** Prend l'état du serveur et y rejoue ce qui n'est pas encore parti. */
-function adopt(snap) {
+function adopt(snap, announce = false) {
+  const before = new Set(data.products.filter(listed).map((p) => String(p.id)));
+  const hadData = data.products.length > 0; // premier chargement sur cet appareil : rien à annoncer
   data = snap;
   queue.forEach(applyLocal);
   save();
   render();
+  if (announce && hadData) {
+    // « Manu a ajouté : lait, pain » quand l'autre personne a rempli la liste entre-temps
+    const added = data.products.filter((p) => listed(p) && !before.has(String(p.id)) && p.added_by && p.added_by !== window.USER);
+    if (added.length) {
+      const who = added[0].added_by, names = added.slice(0, 3).map((p) => p.name);
+      toast(`${who} a ajouté : ${names.join(', ')}${added.length > 3 ? ` et ${added.length - 3} autre${added.length > 4 ? 's' : ''}` : ''}`);
+    }
+  }
 }
 
 async function refresh() {
@@ -177,7 +191,7 @@ async function refresh() {
     if (!r.ok) throw new Error();
     offline = false;
     if (r.status === 204) return renderNet(); // rien n'a changé depuis la dernière fois
-    adopt(await r.json());
+    adopt(await r.json(), true);
   } catch {
     offline = true;
     renderNet();
@@ -242,9 +256,9 @@ function renderUsual() {
     $('#usual .list').innerHTML = `<p class="empty">Aucun produit habituel pour l’instant.${window.ADMIN ? '<br>Importe tes achats fréquents Carrefour depuis l’onglet « Import ».' : ''}</p>`;
     return;
   }
-  const card = (p) => `<button class="card${p.status === 'buy' ? ' in' : ''}" data-usual="${esc(p.id)}" title="${p.status === 'buy' ? 'Dans la liste (toucher pour retirer)' : 'Ajouter à la liste'}">
+  const card = (p) => `<button class="card${listed(p) ? ' in' : ''}" data-usual="${esc(p.id)}" title="${listed(p) ? 'Dans la liste (toucher pour retirer)' : 'Ajouter à la liste'}">
       ${p.image_url ? img(p.image_url) : '<span class="noimg">🛒</span>'}
-      <span class="cn">${esc(p.name)}</span><small>${[p.format, p.price_cents ? euros(+p.price_cents) : ''].filter(Boolean).map(esc).join(' · ')}</small>${p.status === 'buy' ? '<b class="badge">✓</b>' : ''}</button>`;
+      <span class="cn">${esc(p.name)}</span><small>${[p.format, p.price_cents ? euros(+p.price_cents) : ''].filter(Boolean).map(esc).join(' · ')}</small>${listed(p) ? '<b class="badge">✓</b>' : ''}</button>`;
   const grid = (list) => `<div class="cards">${list.map(card).join('')}</div>`;
   if (q) {
     const found = all.filter((p) => norm(p.name).includes(q));
@@ -255,7 +269,7 @@ function renderUsual() {
   const groups = {};
   all.forEach((p) => (groups[AISLE_KEYS.includes(p.category) ? p.category : 'autre'] ||= []).push(p));
   if (usualFilter !== 'top' && !groups[usualFilter]) usualFilter = 'top';
-  const inList = all.filter((p) => p.status === 'buy');
+  const inList = all.filter(listed);
   const chip = (k, label, n) => `<button class="chip${usualFilter === k ? ' on' : ''}" data-chip="${k}">${label}${n ? ` <small>${n}</small>` : ''}</button>`;
   const chips = `<div class="chips">${chip('top', '⭐ Les plus achetés')}${inList.length ? chip('inlist', '✓ Dans la liste', inList.length) : ''}${AISLE_KEYS.filter((k) => groups[k]).map((k) => chip(k, esc(window.AISLES[k]), groups[k].length)).join('')}</div>`;
   const shown = usualFilter === 'top' ? all.slice(0, 30) : usualFilter === 'inlist' ? inList : groups[usualFilter];
@@ -267,7 +281,7 @@ function renderPlats() {
   const recipes = data.recipes.map((r) => {
     const ings = r.products.map((id, i) => ({ p: byId(id), qty: r.qty?.[i] || '' })).filter((x) => x.p);
     const out = ings.filter(({ p }) => p.status === 'out').map(({ p }) => p);
-    return { r, ings, out, inList: ings.filter(({ p }) => p.status === 'buy').length, cost: total(out, false) };
+    return { r, ings, out, inList: ings.filter(({ p }) => listed(p)).length, cost: total(out, false) };
   });
   const status = ({ ings, out, inList, cost }) => (!ings.length ? 'pas d’ingrédients (touche « Modifier »)' : !out.length && !inList ? '✅ tout est là'
     : out.length ? `${plural(out.length, 'ingrédient')} à acheter${cost.c ? ` · ≈ ${euros(cost.c)}` : ''}` : `🛒 ${inList} dans la liste`);
@@ -277,7 +291,7 @@ function renderPlats() {
   const open = recipes.find((x) => +x.r.id === openRecipe);
   const detail = open ? `<div class="detail pdetail">
       <b>${esc(open.r.name)}</b>${open.r.servings || open.r.source_url ? `<small class="hint">${esc(open.r.servings || '')}${open.r.servings && open.r.source_url ? ' · ' : ''}${open.r.source_url ? `<a href="${esc(open.r.source_url)}" target="_blank" rel="noopener">voir la recette</a>` : ''}</small>` : ''}
-      ${open.ings.map(({ p, qty }) => `<div class="ing" data-pid="${esc(p.id)}">${p.status === 'stock' ? '✅' : p.status === 'buy' ? '🛒' : '❌'} ${esc(p.name)}${qty ? ` <small>${esc(qty)}</small>` : ''}${p.status === 'out' ? priceTag(priceOf(p), 'iprice') : ''}</div>`).join('') || '<em>Aucun ingrédient</em>'}
+      ${open.ings.map(({ p, qty }) => `<div class="ing" data-pid="${esc(p.id)}">${p.status === 'stock' ? '✅' : listed(p) ? '🛒' : '❌'} ${esc(p.name)}${qty ? ` <small>${esc(qty)}</small>` : ''}${p.status === 'out' ? priceTag(priceOf(p), 'iprice') : ''}</div>`).join('') || '<em>Aucun ingrédient</em>'}
       <small class="hint">Touche un ingrédient pour dire si tu en as déjà (✅) ou pas (❌).</small>
       <div class="row">${open.out.length ? `<button data-ract="tobuy" data-rid="${open.r.id}">Ajouter les ${open.out.length} ❌ aux courses${open.cost.c ? ` (≈ ${euros(open.cost.c)})` : ''}</button>` : ''}
       <button class="plain" data-ract="edit" data-rid="${open.r.id}">Modifier</button><button class="plain" data-pdel="${open.r.id}">Supprimer</button></div></div>` : '';
@@ -304,26 +318,32 @@ function render() {
   $('#known').innerHTML = data.products.map((p) => `<option value="${esc(p.name)}">`).join('');
 
   const buy = data.products.filter((p) => p.status === 'buy');
-  const t = total(buy);
-  $('#summary').innerHTML = buy.length && !drive
-    ? `<div class="summary"><span><b>${plural(buy.length, 'article')}</b>${t.c ? ` · <b>≈ ${euros(t.c)}</b>` : ''}${t.unknown ? `<small> · ${t.unknown} sans prix</small>` : ''}</span>
-        <div class="row"><button data-done>✓ Courses faites</button><button class="plain" data-drive="start">Commander chez Carrefour</button></div></div>`
+  const got = data.products.filter((p) => p.status === 'got').sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  const all = [...buy, ...got];
+  const t = total(all);
+  $('#summary').innerHTML = all.length && !drive
+    ? `<div class="summary"><span><b>${buy.length ? plural(buy.length, 'article') + ' à prendre' : 'Tout est dans le caddie 🎉'}</b>${got.length && buy.length ? ` · ✓ ${got.length} dans le caddie` : ''}${t.c ? ` · <b>≈ ${euros(t.c)}</b>` : ''}${t.unknown ? `<small> · ${t.unknown} sans prix</small>` : ''}</span>
+        <div class="row"><button data-done>✓ Courses faites</button>${buy.length ? '<button class="plain" data-drive="start">Commander chez Carrefour</button>' : ''}</div></div>`
     : '';
   $('#drive-bar').innerHTML = drive
-    ? `<div class="drive-head"><b>Commande Carrefour</b><span>🛒 ${buy.filter(inCart).length} / ${buy.length}</span><button class="plain" data-drive="finish">Terminer</button></div>`
+    ? `<div class="drive-head"><b>Commande Carrefour</b><span>🛒 ${all.filter(inCart).length} / ${all.length}</span><button class="plain" data-drive="finish">Terminer</button></div>`
     : '';
-  $('#buy .list').innerHTML = drive ? renderDrive(buy) : buy.length
-    ? grouped(buy).map(([k, items]) => `<h2 class="aisle">${esc(window.AISLES[k])}</h2>` + items.map((p) => `
-        <div class="item" data-id="${esc(p.id)}"><input type="checkbox" data-act="bought" aria-label="Acheté">${img(p.image_url, 'thumb')}
-          <span class="n" data-act="edit"><span class="nm">${esc(p.name)}${qtyLabel(p)}</span>${p.note ? `<small class="note">${esc(p.note)}</small>` : ''}</span>
-          ${priceTag(linePrice(p))}${p.added_by && p.added_by !== window.USER ? `<span class="who" title="Ajouté par ${esc(p.added_by)}">${esc(initial(p.added_by))}</span>` : ''}
-          <button class="x" data-act="out" title="Retirer de la liste">✕</button></div>${editBlock(p)}`).join('')).join('')
+  const row = (p) => {
+    const isGot = p.status === 'got';
+    return `<div class="item${isGot ? ' got' : ''}" data-id="${esc(p.id)}"><input type="checkbox" data-act="${isGot ? 'unbought' : 'bought'}"${isGot ? ' checked' : ''} aria-label="${isGot ? 'Remettre à acheter' : 'Dans le caddie'}">${img(p.image_url, 'thumb')}
+      <span class="n" data-act="edit"><span class="nm">${esc(p.name)}${qtyLabel(p)}</span>${p.note ? `<small class="note">${esc(p.note)}</small>` : ''}</span>
+      ${priceTag(linePrice(p))}${!isGot && p.added_by && p.added_by !== window.USER ? `<span class="who" title="Ajouté par ${esc(p.added_by)}">${esc(initial(p.added_by))}</span>` : ''}
+      ${isGot ? '' : '<button class="x" data-act="out" title="Retirer de la liste">✕</button>'}</div>${editBlock(p)}`;
+  };
+  $('#buy .list').innerHTML = drive ? renderDrive(all) : all.length
+    ? grouped(buy).map(([k, items]) => `<h2 class="aisle">${esc(window.AISLES[k])}</h2>` + items.map(row).join('')).join('')
+      + (got.length ? `<h2 class="aisle got-title">✓ Dans le caddie <small>${got.length}</small></h2>` + got.map(row).join('') : '')
     : `<p class="empty">Rien à acheter 🎉<br><small>Ajoute un produit ci-dessus, ou pioche dans <a href="#" data-goto="usual">⭐ Habituels</a> et <a href="#" data-goto="plats">🍽️ Plats</a>.</small></p>`;
 
   if ($('#stock')) {
     const q = norm($('#stock .search').value.trim());
     // les habituels Carrefour jamais achetés via l'appli restent dans l'onglet Habituels, pas dans le placard
-    const rows = data.products.filter((p) => p.status !== 'buy' && norm(p.name).includes(q) && !(p.usual_rank && p.status === 'out' && !+p.times_bought));
+    const rows = data.products.filter((p) => !listed(p) && norm(p.name).includes(q) && !(p.usual_rank && p.status === 'out' && !+p.times_bought));
     $('#stock .list').innerHTML = rows.length
       ? grouped(rows).map(([k, items]) => `<h2 class="aisle">${esc(window.AISLES[k])}</h2>` + items.map((p) => `
           <div class="item" data-id="${esc(p.id)}"><span class="n" data-act="edit">${esc(p.name)} <small>${+p.times_bought ? `acheté ${p.times_bought}× · ${ago(p.last_bought)}` : 'jamais acheté'}</small></span>
@@ -382,13 +402,15 @@ document.addEventListener('click', (e) => {
   const go = e.target.closest('[data-goto]');
   if (go) { e.preventDefault(); return showTab(go.dataset.goto); }
 
-  // « Courses faites » : vide la liste (tout passe en acheté), avec Annuler
+  // « Courses faites » : ce qui est dans le caddie est acheté (si rien n'est coché : toute la liste), avec Annuler
   if (e.target.closest('[data-done]')) {
-    const items = data.products.filter((p) => p.status === 'buy' && !isTmp(p));
+    const someGot = data.products.some((p) => p.status === 'got');
+    const items = data.products.filter((p) => (someGot ? p.status === 'got' : listed(p)) && !isTmp(p));
+    const left = someGot ? data.products.filter((p) => p.status === 'buy').length : 0;
     const before = items.map((p) => ({ id: +p.id, fields: { status: p.status, qty: p.qty, added_by: p.added_by, times_bought: +p.times_bought, last_bought: p.last_bought } }));
     call({ action: 'all_bought' });
     drive = null; saveDrive();
-    toast(`Courses faites 🎉 ${plural(items.length, 'article')} retiré${items.length > 1 ? 's' : ''} de la liste`, { action: 'restore_many', items: before });
+    toast(`Courses faites 🎉 ${plural(items.length, 'article')} acheté${items.length > 1 ? 's' : ''}${left ? ` · ${left} reste${left > 1 ? 'nt' : ''} dans la liste` : ''}`, { action: 'restore_many', items: before });
     return;
   }
 
@@ -397,7 +419,8 @@ document.addEventListener('click', (e) => {
   if (a && row) {
     const p = byId(row.dataset.id ?? row.dataset.edit);
     if (!p) return;
-    if (a === 'bought') act(p, { action: 'bought' }, `« ${p.name} » acheté`);
+    if (a === 'bought') act(p, { action: 'bought' }, `« ${p.name} » dans le caddie ✓`);
+    if (a === 'unbought') act(p, { action: 'set_status', status: 'buy' }, `« ${p.name} » remis à prendre`);
     if (a === 'out') act(p, { action: 'set_status', status: 'out' }, `« ${p.name} » retiré de la liste`);
     if (a === 'buy') {
       const toBuy = p.status === 'stock'; // « On en a » → à acheter ; « Manque » → en stock
@@ -422,7 +445,7 @@ document.addEventListener('click', (e) => {
   const u = e.target.closest('[data-usual]');
   if (u) {
     const p = byId(u.dataset.usual);
-    if (p) act(p, { action: 'set_status', status: p.status === 'buy' ? 'out' : 'buy' }, p.status === 'buy' ? `« ${p.name} » retiré de la liste` : `« ${p.name} » ajouté à la liste`);
+    if (p) act(p, { action: 'set_status', status: listed(p) ? 'out' : 'buy' }, listed(p) ? `« ${p.name} » retiré de la liste` : `« ${p.name} » ajouté à la liste`);
   }
   const d = e.target.closest('[data-drive]')?.dataset.drive;
   if (d === 'start') drive = { done: [], finishing: false };
@@ -430,8 +453,9 @@ document.addEventListener('click', (e) => {
   if (d === 'back' && drive) drive.finishing = false;
   if (d === 'quit') drive = null;
   if (d === 'bought' && drive) {
-    const items = data.products.filter((p) => p.status === 'buy' && inCart(p));
-    items.forEach((p) => call({ action: 'bought', ...target(p) }));
+    const items = data.products.filter((p) => listed(p) && inCart(p));
+    items.forEach((p) => call({ action: 'bought', ...target(p) })); // dans le caddie…
+    call({ action: 'all_bought' }); // … puis validés ; le reste de la liste ne bouge pas
     toast(`${plural(items.length, 'article')} acheté${items.length > 1 ? 's' : ''} 👍`);
     drive = null;
   }
@@ -476,7 +500,7 @@ document.addEventListener('click', (e) => {
   const ing = e.target.closest('.ing[data-pid]');
   if (ing) {
     const p = byId(ing.dataset.pid);
-    if (p && p.status !== 'buy') act(p, { action: 'set_status', status: p.status === 'stock' ? 'out' : 'stock' }, p.status === 'stock' ? `« ${p.name} » : on n'en a plus` : `« ${p.name} » : on en a`);
+    if (p && !listed(p)) act(p, { action: 'set_status', status: p.status === 'stock' ? 'out' : 'stock' }, p.status === 'stock' ? `« ${p.name} » : on n'en a plus` : `« ${p.name} » : on en a`);
   }
   const rb = e.target.closest('[data-ract]');
   const ract = rb?.dataset.ract, rid = +rb?.dataset.rid;
@@ -574,7 +598,7 @@ $('#import-recipe').addEventListener('submit', async (e) => {
   }
 });
 
-fetch('assets/recettes.json?v=15').then((r) => r.json()).then((j) => { ideas = j; render(); }).catch(() => {});
+fetch('assets/recettes.json?v=16').then((r) => r.json()).then((j) => { ideas = j; render(); }).catch(() => {});
 
 /* ---------- Robin seulement : placard et imports ---------- */
 
@@ -629,6 +653,76 @@ if (window.ADMIN) {
   });
 }
 
+/* ---------- notifications : « Robin a ajouté : lait, pain… » ---------- */
+
+const other = () => (window.OTHERS || []).join(' ou ') || 'l’autre';
+const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+/** 'on' | 'off' | 'denied' | 'ios' (iPhone : il faut l'appli sur l'écran d'accueil) | 'no' (pas possible) */
+async function pushState() {
+  if (!pushSupported) return isIOS && !standalone ? 'ios' : 'no';
+  if (Notification.permission === 'denied') return 'denied';
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  return sub && Notification.permission === 'granted' ? 'on' : 'off';
+}
+
+const b64ToBytes = (s) => { const b = atob((s + '='.repeat((4 - (s.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, (c) => c.charCodeAt(0)); };
+const post = (body) => fetch('api.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF': window.CSRF }, body: JSON.stringify(body) });
+
+async function enablePush() {
+  const state = await pushState();
+  if (state === 'ios') return toast('Sur iPhone : ouvre ce site dans Safari, touche Partager puis « Sur l’écran d’accueil », et active les notifications depuis l’appli.');
+  if (state === 'no') return toast('Ce navigateur ne gère pas les notifications.');
+  if (state === 'denied') return toast('Notifications bloquées : autorise-les dans les réglages du navigateur pour ce site.');
+  if (await Notification.requestPermission() !== 'granted') return toast('Notifications non autorisées.');
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const { key } = await fetch('api.php?vapid=1', { cache: 'no-store' }).then((r) => r.json());
+    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) }));
+    const r = await post({ action: 'subscribe', endpoint: sub.endpoint });
+    if (!r.ok) throw new Error();
+    store.set('courses-notif-hint', 'done');
+    toast('🔔 Notifications activées : tu seras prévenu quand quelqu’un ajoute un produit.');
+  } catch {
+    toast('Impossible d’activer les notifications pour l’instant.');
+  }
+  updateBell();
+}
+
+async function disablePush() {
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (sub) { await post({ action: 'unsubscribe', endpoint: sub.endpoint }).catch(() => {}); await sub.unsubscribe(); }
+  toast('🔕 Notifications désactivées sur cet appareil.');
+  updateBell();
+}
+
+async function updateBell() {
+  const state = await pushState().catch(() => 'no');
+  const bell = $('#bell');
+  bell.hidden = state === 'no';
+  bell.textContent = state === 'on' ? '🔔' : '🔕';
+  bell.title = state === 'on' ? 'Notifications activées (toucher pour couper)' : 'Activer les notifications';
+  // petit bandeau proposé une fois dans la liste
+  const hint = $('#notif-hint');
+  hint.hidden = state === 'on' || state === 'no' || state === 'denied' || store.get('courses-notif-hint', '') === 'done';
+  hint.innerHTML = `<div class="hint-bar"><span>🔔 Être prévenu quand ${esc(other())} ajoute un produit ?</span><button data-notif="on">Activer</button><button class="plain x" data-notif="later" aria-label="Plus tard">✕</button></div>`;
+  if (state === 'on') { // garde l'abonnement associé à la bonne personne côté serveur
+    const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription();
+    if (sub) post({ action: 'subscribe', endpoint: sub.endpoint }).catch(() => {});
+  }
+}
+
+$('#bell').addEventListener('click', async () => ((await pushState()) === 'on' ? disablePush() : enablePush()));
+document.addEventListener('click', (e) => {
+  const n = e.target.closest('[data-notif]')?.dataset.notif;
+  if (n === 'on') enablePush();
+  if (n === 'later') { store.set('courses-notif-hint', 'done'); $('#notif-hint').hidden = true; }
+});
+
 /* ---------- démarrage ---------- */
 
 render();
@@ -636,4 +730,7 @@ refresh();
 setInterval(() => document.hidden || editing || refresh(), 15000);
 document.addEventListener('visibilitychange', () => document.hidden || refresh());
 window.addEventListener('online', refresh);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(updateBell).catch(() => {});
+else updateBell();
+// une notification touchée remet l'appli au premier plan : on recharge la liste
+navigator.serviceWorker?.addEventListener('message', (e) => e.data === 'refresh' && refresh());

@@ -1,6 +1,6 @@
-// Mode hors ligne : la page et la liste restent consultables sans réseau (magasin, cave…).
-const CACHE = 'courses-v15';
-const ASSETS = ['assets/style.css?v=15', 'assets/app.js?v=15', 'assets/icon.svg', 'manifest.json'];
+// Mode hors ligne (la page reste consultable sans réseau) et notifications « Robin a ajouté… ».
+const CACHE = 'courses-v16';
+const ASSETS = ['assets/style.css?v=16', 'assets/app.js?v=16', 'assets/icon.svg', 'manifest.json'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
@@ -17,8 +17,8 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET' || url.origin !== location.origin) return;
   const path = url.pathname;
 
-  // page et données : réseau d'abord, copie en cache pour le hors ligne
-  if (path.endsWith('/') || path.endsWith('/index.php') || path.endsWith('/api.php')) {
+  // page : réseau d'abord, copie en cache pour le hors ligne (les données, elles, sont gardées par l'appli)
+  if (path.endsWith('/') || path.endsWith('/index.php')) {
     e.respondWith(
       fetch(req)
         .then((r) => {
@@ -36,4 +36,34 @@ self.addEventListener('fetch', (e) => {
       return res;
     })));
   }
+});
+
+// Notification reçue (message vide) : on demande au site ce qui a été ajouté, puis on l'affiche.
+self.addEventListener('push', (e) => {
+  e.waitUntil((async () => {
+    let n = { title: '🛒 Courses', body: 'La liste de courses a changé.' };
+    try {
+      const r = await fetch(new URL('api.php?notif=1', self.registration.scope).href, { credentials: 'include', cache: 'no-store' });
+      if (r.ok) n = await r.json();
+    } catch {}
+    await self.registration.showNotification(n.title, {
+      body: n.body,
+      tag: 'courses', // une seule notification à la fois, remplacée par la plus récente
+      renotify: true,
+      icon: new URL('assets/icon.svg', self.registration.scope).href,
+      badge: new URL('assets/icon.svg', self.registration.scope).href,
+      data: { url: self.registration.scope },
+    });
+  })());
+});
+
+// Toucher la notification ouvre l'appli (ou la remet au premier plan).
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const win = wins.find((w) => w.url.startsWith(self.registration.scope));
+    if (win) { await win.focus(); win.postMessage('refresh'); return; }
+    await self.clients.openWindow(e.notification.data?.url || self.registration.scope);
+  })());
 });

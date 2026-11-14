@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require __DIR__ . '/app/bootstrap.php';
 require __DIR__ . '/app/recipes.php';
+require __DIR__ . '/app/push.php';
 
 $user = require_login(true);
 header('Content-Type: application/json; charset=utf-8');
@@ -64,9 +65,26 @@ function recipe_to_buy(int $recipeId, string $user): void
     foreach ($items as $it) {
         q("UPDATE products SET status = 'buy', added_by = ?, qty = ? WHERE id = ?", [$user, $it['qty'] !== '' ? $it['qty'] : mb_substr((string) $it['rqty'], 0, 20), $it['id']]);
     }
+    if ($items) {
+        $rname = (string) q('SELECT name FROM recipes WHERE id = ?', [$recipeId])->fetchColumn();
+        record_added($user, ['les ingrédients « ' . $rname . ' »']);
+    }
+}
+
+/** Nom d'un produit qui entre dans la liste (pour la notification), seulement s'il n'y était pas déjà. */
+function newly_listed(int $id): ?string
+{
+    $p = q('SELECT name, status FROM products WHERE id = ?', [$id])->fetch();
+    return $p && !in_array($p['status'], ['buy', 'got'], true) ? $p['name'] : null;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    if (isset($_GET['notif'])) { // lu par le service worker quand une notification arrive
+        out(notification_for($user) ?? ['title' => '🛒 Courses', 'body' => 'La liste de courses a changé.']);
+    }
+    if (isset($_GET['vapid'])) { // clé publique pour s'abonner aux notifications
+        out(['key' => vapid_keys()['public']]);
+    }
     $snap = snapshot();
     if (($_GET['v'] ?? '') === $snap['v']) {
         http_response_code(204); // rien de neuf
@@ -81,7 +99,7 @@ if (!hash_equals(csrf(), (string) ($_SERVER['HTTP_X_CSRF'] ?? ''))) {
 $in = json_decode((string) file_get_contents('php://input'), true) ?: [];
 $action = (string) ($in['action'] ?? '');
 $id = (int) ($in['id'] ?? 0);
-$status = in_array($in['status'] ?? '', ['stock', 'buy', 'out'], true) ? $in['status'] : null;
+$status = in_array($in['status'] ?? '', ['stock', 'buy', 'got', 'out'], true) ? $in['status'] : null;
 $name = trim((string) ($in['name'] ?? ''));
 $qty = mb_substr(trim((string) ($in['qty'] ?? '')), 0, 20);
 $note = mb_substr(trim((string) ($in['note'] ?? '')), 0, 160);
@@ -98,22 +116,41 @@ switch ($action) {
         if ($name === '') {
             out(['error' => 'name'], 422);
         }
+        $isNew = !q('SELECT id FROM products WHERE name_key = ?', [mb_strtolower(trim(preg_replace('/\s+/', ' ', $name)))])->fetchColumn();
         $pid = product_id($name, 'buy');
+        $added = $isNew ? $name : newly_listed($pid);
         q("UPDATE products SET status = 'buy', qty = ?, added_by = ? WHERE id = ?", [$qty, $user, $pid]);
+        if ($added) {
+            record_added($user, [$added . ($qty !== '' ? ' (' . $qty . ')' : '')]);
+        }
         if ($note !== '') {
             q('UPDATE products SET note = ? WHERE id = ?', [$note, $pid]);
         }
         break;
     case 'set_status':
         if ($status === 'buy') {
-            q("UPDATE products SET status = 'buy', added_by = ? WHERE id = ?", [$user, $id]);
+            $added = newly_listed($id); // décocher un produit du caddie ne prévient personne
+            q("UPDATE products SET status = 'buy', added_by = COALESCE(added_by, ?) WHERE id = ?", [$user, $id]);
+            if ($added) {
+                q('UPDATE products SET added_by = ? WHERE id = ?', [$user, $id]);
+                record_added($user, [$added]);
+            }
+        } elseif ($status === 'got') {
+            q("UPDATE products SET status = 'got' WHERE id = ?", [$id]);
         } elseif ($status) {
             q("UPDATE products SET status = ?, qty = '', added_by = NULL WHERE id = ?", [$status, $id]);
         }
         break;
-    case 'bought': // coché dans la liste : acheté, donc en stock
-        q("UPDATE products SET status = 'stock', qty = '', added_by = NULL, times_bought = times_bought + 1, last_bought = ? WHERE id = ?", [date('Y-m-d'), $id]);
+    case 'bought': // coché dans la liste : dans le caddie (validé par « Courses faites »)
+        q("UPDATE products SET status = 'got' WHERE id = ?", [$id]);
         break;
+    case 'subscribe': // cet appareil veut recevoir les notifications
+        save_subscription($user, (string) ($in['endpoint'] ?? '')) ? out(['ok' => true]) : out(['error' => 'endpoint'], 422);
+        // no break : out() termine le script
+    case 'unsubscribe':
+        delete_subscription((string) ($in['endpoint'] ?? ''));
+        out(['ok' => true]);
+        // no break
     case 'update_product': // quantité, note, rayon et nom
         q('UPDATE products SET qty = ?, note = ? WHERE id = ?', [$qty, $note, $id]);
         if ($category) {
@@ -140,7 +177,7 @@ switch ($action) {
         $f = (array) ($in['fields'] ?? []);
         $last = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($f['last_bought'] ?? '')) ? $f['last_bought'] : null;
         q('UPDATE products SET status = ?, qty = ?, added_by = ?, times_bought = ?, last_bought = ? WHERE id = ?', [
-            in_array($f['status'] ?? '', ['stock', 'buy', 'out'], true) ? $f['status'] : 'out',
+            in_array($f['status'] ?? '', ['stock', 'buy', 'got', 'out'], true) ? $f['status'] : 'out',
             mb_substr((string) ($f['qty'] ?? ''), 0, 20),
             ($f['added_by'] ?? null) !== null ? mb_substr((string) $f['added_by'], 0, 40) : null,
             max(0, (int) ($f['times_bought'] ?? 0)),
@@ -148,15 +185,16 @@ switch ($action) {
             $id,
         ]);
         break;
-    case 'all_bought': // « Courses faites » : tout ce qui était à acheter passe en acheté
-        q("UPDATE products SET status = 'stock', qty = '', added_by = NULL, times_bought = times_bought + 1, last_bought = ? WHERE status = 'buy'", [date('Y-m-d')]);
+    case 'all_bought': // « Courses faites » : ce qui est dans le caddie est acheté ; si rien n'est coché, toute la liste
+        $from = q("SELECT COUNT(*) FROM products WHERE status = 'got'")->fetchColumn() ? "'got'" : "'buy', 'got'";
+        q("UPDATE products SET status = 'stock', qty = '', added_by = NULL, times_bought = times_bought + 1, last_bought = ? WHERE status IN ($from)", [date('Y-m-d')]);
         break;
     case 'restore_many': // annule « Courses faites » : [{id, fields}, …]
         foreach (array_slice((array) ($in['items'] ?? []), 0, 500) as $it) {
             $f = (array) ($it['fields'] ?? []);
             $last = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($f['last_bought'] ?? '')) ? $f['last_bought'] : null;
             q('UPDATE products SET status = ?, qty = ?, added_by = ?, times_bought = ?, last_bought = ? WHERE id = ?', [
-                in_array($f['status'] ?? '', ['stock', 'buy', 'out'], true) ? $f['status'] : 'out',
+                in_array($f['status'] ?? '', ['stock', 'buy', 'got', 'out'], true) ? $f['status'] : 'out',
                 mb_substr((string) ($f['qty'] ?? ''), 0, 20),
                 ($f['added_by'] ?? null) !== null ? mb_substr((string) $f['added_by'], 0, 40) : null,
                 max(0, (int) ($f['times_bought'] ?? 0)),

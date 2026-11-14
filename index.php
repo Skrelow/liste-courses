@@ -11,9 +11,9 @@ $admin = is_admin($user); // Robin : placard et imports en plus
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="assets/icon.svg">
 <link rel="apple-touch-icon" href="assets/icon.svg">
-<link rel="stylesheet" href="assets/style.css?v=15">
+<link rel="stylesheet" href="assets/style.css?v=16">
 </head><body>
-<header><h1>🛒 Courses</h1><span><?= h($user) ?> · <a href="logout.php">Quitter</a></span></header>
+<header><h1>🛒 Courses</h1><span><button id="bell" class="bell" hidden title="Notifications" aria-label="Notifications">🔕</button><?= h($user) ?> · <a href="logout.php">Quitter</a></span></header>
 <nav id="tabs">
   <button data-tab="buy" class="on">🛒 Liste</button><button data-tab="usual">⭐ Habituels</button><button data-tab="plats">🍽️ Plats</button><?php if ($admin): ?><button data-tab="stock" class="icon" title="Placard" aria-label="Placard">📦</button><button data-tab="import" class="icon" title="Import" aria-label="Import">⬇️</button><?php endif; ?>
 </nav>
@@ -21,6 +21,7 @@ $admin = is_admin($user); // Robin : placard et imports en plus
   <section id="buy">
     <form class="row" data-add><input list="known" placeholder="Ajouter un produit… (ex : lait x2)" autocomplete="off" required><button aria-label="Ajouter">＋</button></form>
     <datalist id="known"></datalist>
+    <div id="notif-hint" hidden></div>
     <div id="summary"></div>
     <div id="drive-bar"></div>
     <div class="list"></div>
@@ -75,7 +76,8 @@ $admin = is_admin($user); // Robin : placard et imports en plus
 window.CSRF = <?= json_encode(csrf()) ?>;
 window.USER = <?= json_encode($user, JSON_UNESCAPED_UNICODE) ?>;
 window.ADMIN = <?= $admin ? 'true' : 'false' ?>;
+window.OTHERS = <?= json_encode(array_values(array_diff((array) cfg('users', []), [$user])), JSON_UNESCAPED_UNICODE) ?>;
 window.AISLES = <?= json_encode(array_map(fn($a) => $a[0], aisles()), JSON_UNESCAPED_UNICODE) ?>;
 </script>
-<script src="assets/app.js?v=15"></script>
+<script src="assets/app.js?v=16"></script>
 </body></html>
