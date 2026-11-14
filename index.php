@@ -10,17 +10,21 @@ $user = require_login();
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="assets/icon.svg">
 <link rel="apple-touch-icon" href="assets/icon.svg">
-<link rel="stylesheet" href="assets/style.css?v=7">
+<link rel="stylesheet" href="assets/style.css?v=10">
 </head><body>
 <header><h1>🛒 Courses</h1><span><?= h($user) ?> · <a href="logout.php">Quitter</a></span></header>
 <nav id="tabs">
-  <button data-tab="buy" class="on">À acheter</button><button data-tab="stock">Placard</button><button data-tab="plats">Plats</button><button data-tab="import">Import</button>
+  <button data-tab="buy" class="on">À acheter</button><button data-tab="usual">Habituels</button><button data-tab="stock">Placard</button><button data-tab="plats">Plats</button><button data-tab="import">Import</button>
 </nav>
 <main>
   <section id="buy">
     <form class="row" data-add><input list="known" placeholder="Ajouter un produit… (ex : lait x2)" autocomplete="off" required><button>＋</button></form>
     <datalist id="known"></datalist>
     <div id="drive-bar"></div>
+    <div class="list"></div>
+  </section>
+  <section id="usual" hidden>
+    <input class="search" placeholder="Chercher dans tes habituels…" type="search">
     <div class="list"></div>
   </section>
   <section id="stock" hidden>
@@ -48,6 +52,14 @@ $user = require_login();
     <button id="parse" class="plain">Analyser</button>
     <div class="list" id="preview"></div>
     <button id="confirm-import" hidden>Ajouter au placard</button>
+
+    <h2 class="aisle">Achats fréquents Carrefour</h2>
+    <p class="hint">Pour remplir l'onglet « Habituels » avec tes produits Carrefour (photos et liens) :</p>
+    <ol class="hint steps">
+      <li>Sur ordinateur, fais glisser ce bouton dans ta barre de favoris : <a id="bookmarklet" class="plain-link">⬇ Exporter Carrefour</a></li>
+      <li>Ouvre <a href="https://www.carrefour.fr/mon-compte/achats-frequents" target="_blank" rel="noopener">tes achats fréquents</a> sur carrefour.fr (connecté) et clique sur le favori : un fichier <code>carrefour-habituels.json</code> est téléchargé.</li>
+      <li>Choisis ce fichier ici : <input type="file" id="catalog-file" accept=".json,application/json"></li>
+    </ol>
   </section>
 </main>
 <div id="net" hidden></div>
@@ -57,5 +69,5 @@ window.CSRF = <?= json_encode(csrf()) ?>;
 window.USER = <?= json_encode($user, JSON_UNESCAPED_UNICODE) ?>;
 window.AISLES = <?= json_encode(array_map(fn($a) => $a[0], aisles()), JSON_UNESCAPED_UNICODE) ?>;
 </script>
-<script src="assets/app.js?v=7"></script>
+<script src="assets/app.js?v=10"></script>
 </body></html>

@@ -16,7 +16,7 @@ function out($data, int $code = 200): void
 /** statut : stock = on en a, buy = à acheter, out = on n'en a plus / on ne sait pas. */
 function snapshot(): array
 {
-    $products = q('SELECT id, name, status, category, qty, note, added_by, shop_url, times_bought, last_bought FROM products ORDER BY name_key')->fetchAll();
+    $products = q('SELECT id, name, status, category, qty, note, added_by, shop_url, image_url, format, usual_rank, times_bought, last_bought FROM products ORDER BY name_key')->fetchAll();
     $recipes = q('SELECT id, name, source_url, servings FROM recipes ORDER BY name')->fetchAll();
     $links = q('SELECT recipe_id, product_id, qty FROM recipe_items')->fetchAll();
     foreach ($recipes as &$r) {
@@ -24,7 +24,37 @@ function snapshot(): array
         $r['products'] = array_map(fn($l) => (int) $l['product_id'], $mine);
         $r['qty'] = array_map(fn($l) => (string) $l['qty'], $mine); // même ordre que products
     }
-    return ['products' => $products, 'recipes' => $recipes];
+    $snap = ['products' => $products, 'recipes' => $recipes];
+    $snap['v'] = md5(json_encode($snap)); // version : l'appli ne retélécharge que si ça a changé
+    return $snap;
+}
+
+/**
+ * Achats fréquents Carrefour : [{name, url, image, format, ean}, …] dans l'ordre (le plus acheté d'abord).
+ * Retrouve chaque produit par code-barres puis par nom ; les nouveaux restent hors du placard tant qu'on ne les achète pas.
+ */
+function import_catalog(array $items): void
+{
+    $https = fn($u) => preg_match('#^https://[^\s"\'<>]{5,490}$#', (string) $u) ? (string) $u : null;
+    db()->beginTransaction();
+    q('UPDATE products SET usual_rank = NULL');
+    foreach (array_slice($items, 0, 1500) as $rank => $it) {
+        $name = mb_substr(trim(preg_replace('/\s+/', ' ', (string) ($it['name'] ?? ''))), 0, 160);
+        if (mb_strlen($name) < 2) {
+            continue;
+        }
+        $ean = preg_match('/^\d{6,14}$/', (string) ($it['ean'] ?? '')) ? (string) $it['ean'] : null;
+        $id = $ean ? q('SELECT id FROM products WHERE ean = ?', [$ean])->fetchColumn() : false;
+        $id = $id ?: product_id($name);
+        q('UPDATE products SET ean = COALESCE(?, ean), shop_url = COALESCE(?, shop_url), image_url = COALESCE(?, image_url), format = ?, usual_rank = ? WHERE id = ?', [
+            $ean, $https($it['url'] ?? ''), $https($it['image'] ?? ''), mb_substr(trim((string) ($it['format'] ?? '')), 0, 40), $rank + 1, $id,
+        ]);
+    }
+    // les mots-clés des rayons s'enrichissent : on retente les produits restés en « Autre »
+    foreach (q("SELECT id, name FROM products WHERE category = 'autre' OR category IS NULL")->fetchAll() as $p) {
+        q('UPDATE products SET category = ? WHERE id = ?', [guess_aisle($p['name']), $p['id']]);
+    }
+    db()->commit();
 }
 
 /** Met à acheter les ingrédients qu'on n'a pas, avec la quantité de la recette si aucune n'est notée. */
@@ -37,7 +67,12 @@ function recipe_to_buy(int $recipeId, string $user): void
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    out(snapshot());
+    $snap = snapshot();
+    if (($_GET['v'] ?? '') === $snap['v']) {
+        http_response_code(204); // rien de neuf
+        exit;
+    }
+    out($snap);
 }
 if (!hash_equals(csrf(), (string) ($_SERVER['HTTP_X_CSRF'] ?? ''))) {
     out(['error' => 'csrf'], 403);
@@ -120,6 +155,9 @@ switch ($action) {
             }
             q("UPDATE products SET status = 'stock', qty = '', added_by = NULL, times_bought = times_bought + 1, last_bought = ? WHERE id = ?", [date('Y-m-d'), product_id((string) $n)]);
         }
+        break;
+    case 'import_catalog': // achats fréquents Carrefour (fichier exporté depuis carrefour.fr)
+        import_catalog((array) ($in['items'] ?? []));
         break;
     case 'import_url': // lit une recette sur un site (aperçu, rien n'est enregistré)
         $recipe = fetch_recipe(trim((string) ($in['url'] ?? '')));

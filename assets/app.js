@@ -125,10 +125,11 @@ function adopt(snap) {
 async function refresh() {
   if (queue.length) return flush();
   try {
-    const r = await fetch('api.php', { cache: 'no-store' });
+    const r = await fetch('api.php?v=' + encodeURIComponent(data.v || ''), { cache: 'no-store' });
     if (r.status === 401) return (location.href = 'login.php');
     if (!r.ok) throw new Error();
     offline = false;
+    if (r.status === 204) return renderNet(); // rien n'a changé depuis la dernière fois
     adopt(await r.json());
   } catch {
     offline = true;
@@ -173,13 +174,40 @@ function renderDrive(buy) {
   }
   if (!buy.length) return '<p class="empty">Rien à acheter 🎉</p>';
   const todo = buy.filter((p) => !inCart(p)), done = buy.filter(inCart);
-  const row = (p) => `<div class="item drive${inCart(p) ? ' done' : ''}" data-id="${esc(p.id)}">
+  const row = (p) => `<div class="item drive${inCart(p) ? ' done' : ''}" data-id="${esc(p.id)}">${thumb(p)}
       <span class="n" data-act="edit">${esc(p.name)}${qtyLabel(p)}${p.note ? `<small class="note">${esc(p.note)}</small>` : ''}${p.shop_url ? '' : '<small class="note">recherche par nom</small>'}</span>
       ${shopLink(p, 'Ouvrir', 'shop-btn')}
       <button class="tick" data-act="cart" title="${inCart(p) ? 'Retirer du panier' : 'Mis au panier'}">${inCart(p) ? '↺' : '✓'}</button></div>
       ${String(editing) === String(p.id) ? editForm(p) : ''}`;
   return grouped(todo).map(([k, items]) => `<h2 class="aisle">${esc(window.AISLES[k])}</h2>` + items.map(row).join('')).join('')
     + (done.length ? `<h2 class="aisle">Dans le panier</h2>` + done.map(row).join('') : '');
+}
+
+/** minuscules sans accents, pour chercher « creme » et trouver « Crème » */
+const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const thumb = (p) => (p.image_url ? `<img class="thumb" src="${esc(p.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '');
+
+/** Onglet Habituels : tes achats fréquents Carrefour, en vignettes ; toucher = ajouter / retirer de la liste. */
+function renderUsual() {
+  const q = norm($('#usual .search').value.trim());
+  const all = data.products.filter((p) => p.usual_rank).sort((a, b) => a.usual_rank - b.usual_rank);
+  if (!all.length) {
+    $('#usual .list').innerHTML = '<p class="empty">Aucun habituel pour l’instant.<br>Importe tes achats fréquents Carrefour depuis l’onglet « Import ».</p>';
+    return;
+  }
+  const card = (p) => `<button class="card${p.status === 'buy' ? ' in' : ''}" data-usual="${esc(p.id)}" title="${p.status === 'buy' ? 'Dans la liste (toucher pour retirer)' : 'Ajouter à la liste'}">
+      ${p.image_url ? `<img src="${esc(p.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="noimg">🛒</span>'}
+      <span class="cn">${esc(p.name)}</span>${p.format ? `<small>${esc(p.format)}</small>` : ''}${p.status === 'buy' ? '<b class="badge">✓</b>' : ''}</button>`;
+  const grid = (list) => `<div class="cards">${list.map(card).join('')}</div>`;
+  if (q) {
+    const found = all.filter((p) => norm(p.name).includes(q));
+    $('#usual .list').innerHTML = found.length ? grid(found) : '<p class="empty">Rien trouvé.</p>';
+    return;
+  }
+  const groups = {};
+  all.forEach((p) => (groups[AISLE_KEYS.includes(p.category) ? p.category : 'autre'] ||= []).push(p));
+  $('#usual .list').innerHTML = `<h2 class="aisle">Les plus achetés</h2>${grid(all.slice(0, 12))}`
+    + AISLE_KEYS.filter((k) => groups[k]).map((k) => `<h2 class="aisle">${esc(window.AISLES[k])} <small>${groups[k].length}</small></h2>${grid(groups[k])}`).join('');
 }
 
 function render() {
@@ -191,15 +219,16 @@ function render() {
     : buy.length ? `<button class="plain drive-start" data-drive="start">🛒 Remplir le panier Carrefour</button>` : '';
   $('#buy .list').innerHTML = drive ? renderDrive(buy) : buy.length
     ? grouped(buy).map(([k, items]) => `<h2 class="aisle">${esc(window.AISLES[k])}</h2>` + items.map((p) => `
-        <div class="item" data-id="${esc(p.id)}"><input type="checkbox" data-act="bought" aria-label="Acheté">
+        <div class="item" data-id="${esc(p.id)}"><input type="checkbox" data-act="bought" aria-label="Acheté">${thumb(p)}
           <span class="n" data-act="edit">${esc(p.name)}${p.qty ? ` <b class="qty">${esc(/^\d+$/.test(p.qty) ? '×' + p.qty : p.qty)}</b>` : ''}${p.note ? `<small class="note">${esc(p.note)}</small>` : ''}</span>
           ${p.added_by ? `<span class="who" title="Ajouté par ${esc(p.added_by)}">${esc(initial(p.added_by))}</span>` : ''}
           ${shopLink(p)}<button class="x" data-act="out" title="Retirer de la liste">✕</button></div>
         ${String(editing) === String(p.id) ? editForm(p) : ''}`).join('')).join('')
     : '<p class="empty">Rien à acheter 🎉</p>';
 
-  const q = $('#stock .search').value.trim().toLowerCase();
-  const rows = data.products.filter((p) => p.status !== 'buy' && p.name.toLowerCase().includes(q));
+  const q = norm($('#stock .search').value.trim());
+  // les habituels Carrefour jamais achetés via l'appli restent dans l'onglet Habituels, pas dans le placard
+  const rows = data.products.filter((p) => p.status !== 'buy' && norm(p.name).includes(q) && !(p.usual_rank && p.status === 'out' && !+p.times_bought));
   $('#stock .list').innerHTML = rows.length
     ? grouped(rows).map(([k, items]) => `<h2 class="aisle">${esc(window.AISLES[k])}</h2>` + items.map((p) => `
         <div class="item" data-id="${esc(p.id)}"><span class="n" data-act="edit">${esc(p.name)} <small>${+p.times_bought ? `acheté ${p.times_bought}× · ${ago(p.last_bought)}` : 'jamais acheté'}</small></span>
@@ -230,6 +259,8 @@ function render() {
     + (openIdea === i ? `<div class="detail">${r.ingredients.map((x) => `<div>• ${esc(x)}</div>`).join('')}
         <div class="row"><button data-iact="tobuy" data-idea="${i}">Ajouter aux courses</button><button class="plain" data-iact="save" data-idea="${i}">Juste l'ajouter à mes plats</button></div></div>` : '')).join('')
     || '<p class="empty">Toutes les idées sont déjà dans tes plats.</p>';
+
+  if (!$('#usual').hidden) renderUsual(); // 400+ vignettes : seulement quand l'onglet est affiché
 
   renderNet();
 }
@@ -280,6 +311,11 @@ document.addEventListener('click', (e) => {
       render();
     }
     if (a === 'edit') { editing = String(editing) === String(p.id) ? null : p.id; render(); $(`form[data-edit="${CSS.escape(String(editing))}"] input[name=qty]`)?.focus(); }
+  }
+  const u = e.target.closest('[data-usual]');
+  if (u) {
+    const p = byId(u.dataset.usual);
+    if (p) act(p, { action: 'set_status', status: p.status === 'buy' ? 'out' : 'buy' }, p.status === 'buy' ? `« ${p.name} » retiré de la liste` : `« ${p.name} » ajouté à la liste`);
   }
   const d = e.target.closest('[data-drive]')?.dataset.drive;
   if (d === 'start') drive = { done: [], finishing: false };
@@ -368,6 +404,27 @@ $('#buy [data-add]').addEventListener('submit', (e) => {
   i.focus();
 });
 $('#stock .search').addEventListener('input', render);
+$('#usual .search').addEventListener('input', renderUsual);
+
+// Achats fréquents Carrefour : fichier produit par le favori « Exporter Carrefour »
+$('#catalog-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const items = JSON.parse(await file.text());
+    if (!Array.isArray(items) || !items.length || !items[0].name) throw new Error();
+    call({ action: 'import_catalog', items });
+    toast(`${items.length} produits importés dans « Habituels »`);
+    $('#tabs [data-tab=usual]').click();
+  } catch {
+    toast('Ce fichier ne ressemble pas à un export Carrefour.');
+  }
+  e.target.value = '';
+});
+
+// Favori à glisser dans la barre : sur carrefour.fr/mon-compte/achats-frequents, parcourt toutes les pages et télécharge la liste.
+$('#bookmarklet').href = 'javascript:' + encodeURIComponent(`(async()=>{const S=t=>new Promise(r=>setTimeout(r,t)),M=new Map,X=()=>document.querySelectorAll('article[data-testid]').forEach(c=>{const a=c.querySelector('a[href*="/p/"]'),i=c.querySelector('img[src*="media.carrefour.fr"]');if(!a||!/^\\d+$/.test(c.dataset.testid))return;let n=a.textContent.trim().replace(/\\s+/g,' ');const w=n.split(' ');let k=0;while(k<w.length-1&&w[k]===w[k].toUpperCase()&&/[A-Z]/.test(w[k]))k++;const b=w.slice(0,k).join(' ');if(k&&n.endsWith(' '+b))n=w.slice(k).join(' ');const f=c.querySelector('.c-tag span');M.set(c.dataset.testid,{name:n,url:a.href,image:i&&/^https:/.test(i.src)?i.src:'',format:f?f.textContent.trim():'',ean:c.dataset.testid})});if(!/achats-frequents/.test(location.href))return alert('Ouvre d\\'abord « Mes achats fréquents » sur carrefour.fr');X();for(let j=0;j<60;j++){const b=[...document.querySelectorAll('button,a')].find(x=>/Produits suivants/i.test(x.textContent));if(!b||b.disabled)break;const s=M.size;b.click();for(let t=0;t<20&&M.size===s;t++){await S(500);X()}await S(800);X();if(M.size===s)break}const l=document.createElement('a');l.href=URL.createObjectURL(new Blob([JSON.stringify([...M.values()])],{type:'application/json'}));l.download='carrefour-habituels.json';document.body.appendChild(l);l.click();alert(M.size+' produits exportés : choisis le fichier dans l\\'onglet Import de l\\'appli Courses')})()`);
+$('#bookmarklet').addEventListener('click', (e) => { e.preventDefault(); toast('Fais glisser ce bouton dans ta barre de favoris, puis clique dessus sur carrefour.fr'); });
 
 $('#recipe-form').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -407,7 +464,7 @@ $('#import-recipe').addEventListener('submit', async (e) => {
   }
 });
 
-fetch('assets/recettes.json?v=7').then((r) => r.json()).then((j) => { ideas = j; render(); }).catch(() => {});
+fetch('assets/recettes.json?v=10').then((r) => r.json()).then((j) => { ideas = j; render(); }).catch(() => {});
 
 // import : nettoie chaque ligne (prix, quantités, contenances) en gardant le nom du produit
 function clean(line) {

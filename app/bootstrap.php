@@ -74,6 +74,10 @@ function migrate(PDO $pdo): void
             'note' => "VARCHAR(160) NOT NULL DEFAULT ''",
             'added_by' => 'VARCHAR(40) NULL',
             'shop_url' => 'VARCHAR(500) NULL',
+            'image_url' => 'VARCHAR(500) NULL',
+            'ean' => 'VARCHAR(20) NULL',
+            'format' => "VARCHAR(40) NOT NULL DEFAULT ''",
+            'usual_rank' => 'INT NULL', // rang dans les achats fréquents Carrefour (NULL = pas un habituel)
         ],
         'recipes' => [
             'source_url' => 'VARCHAR(500) NULL',
@@ -104,16 +108,17 @@ function migrate(PDO $pdo): void
 function aisles(): array
 {
     return [
-        'fruits' => ['Fruits & légumes', 'fruit, légume, pomme, poire, banane, orange, citron, clémentine, mandarine, pamplemousse, kiwi, fraise, framboise, myrtille, raisin, melon, pastèque, pêche, nectarine, abricot, prune, cerise, ananas, mangue, avocat, tomate, salade, laitue, mâche, roquette, carotte, oignon, ail, échalote, pomme de terre, pommes de terre, patate, courgette, aubergine, poivron, concombre, champignon, brocoli, chou, chou-fleur, épinard, haricots verts, poireau, navet, radis, betterave, céleri, fenouil, persil, coriandre, basilic, menthe, ciboulette, gingembre, courge, potiron, butternut'],
-        'pain' => ['Pain & viennoiseries', 'pain, baguette, brioche, croissant, pain au chocolat, viennoiserie, biscotte, wrap, tortilla, pita'],
-        'frais' => ['Crèmerie & frais', 'lait, yaourt, yogourt, skyr, fromage, fromage blanc, beurre, crème, crème fraîche, oeuf, emmental, gruyère, comté, mozzarella, parmesan, feta, chèvre, camembert, raclette, ricotta, mascarpone, jambon, lardon, bacon, chorizo, saucisson, rillettes, pâté, surimi, houmous, gnocchi, ravioli, tortellini, flan, pâte feuilletée, pâte brisée, pâte à pizza'],
-        'viande' => ['Viande & poisson', 'viande, poulet, dinde, boeuf, veau, porc, agneau, canard, steak, steak haché, viande hachée, escalope, côte, côtelette, rôti, saucisse, merguez, chipolata, filet, cuisse, poisson, saumon, cabillaud, colin, truite, crevette, moule'],
-        'epicerie' => ['Épicerie salée', 'pâte, spaghetti, tagliatelle, penne, coquillette, riz, semoule, couscous, quinoa, boulgour, lentille, pois chiche, haricot, farine, maïzena, huile, vinaigre, sel, poivre, épice, curry, paprika, cumin, moutarde, ketchup, mayonnaise, sauce, sauce tomate, pesto, bouillon, soupe, conserve, thon, sardine, maquereau, maïs, olive, cornichon, chips, cacahuète, apéritif, crackers, purée, tomates concassées, concentré de tomate'],
-        'sucre' => ['Sucré & petit-déj', "sucre, chocolat, café, thé, tisane, infusion, cacao, céréale, muesli, flocons d'avoine, confiture, miel, biscuit, gâteau, madeleine, nutella, pâte à tartiner, compote, bonbon, levure, crêpe"],
-        'boissons' => ['Boissons', "eau, eau gazeuse, jus, jus d'orange, soda, coca, limonade, sirop, bière, vin, rosé, champagne, ice tea, perrier"],
-        'surgeles' => ['Surgelés', 'surgelé, glace, sorbet, frites, pizza, poisson pané, nuggets'],
-        'hygiene' => ['Hygiène & beauté', 'shampoing, shampooing, après-shampoing, gel douche, savon, dentifrice, brosse à dents, déodorant, déo, coton, coton-tige, rasoir, mouchoir, papier toilette, serviette hygiénique, tampon, crème solaire, crème hydratante'],
-        'entretien' => ['Maison & entretien', 'lessive, adoucissant, liquide vaisselle, pastille lave-vaisselle, tablette lave-vaisselle, éponge, sac poubelle, essuie-tout, sopalin, javel, nettoyant, vinaigre blanc, papier alu, papier aluminium, film alimentaire, papier cuisson, allumette, ampoule, pile'],
+        'fruits' => ['Fruits & légumes', 'fruit, légume, pomme, poire, banane, orange, citron, clémentine, mandarine, pamplemousse, kiwi, fraise, framboise, myrtille, raisin, melon, pastèque, pêche, nectarine, abricot, prune, cerise, ananas, mangue, avocat, tomate, salade, laitue, mâche, roquette, carotte, oignon, ail, échalote, pomme de terre, pommes de terre, patate, courgette, aubergine, poivron, concombre, champignon, brocoli, chou, chou-fleur, épinard, haricots verts, poireau, navet, radis, betterave, céleri, fenouil, persil, coriandre, basilic, menthe, ciboulette, gingembre, courge, potiron, butternut, asperge, poêlée de légumes'],
+        'pain' => ['Pain & viennoiseries', 'pain, baguette, brioche, croissant, pain au chocolat, viennoiserie, biscotte, wrap, tortilla, pita, burger, pain burger, muffin'],
+        'frais' => ['Crèmerie & frais', 'lait, yaourt, yogourt, skyr, fromage, fromage blanc, beurre, crème, crème fraîche, oeuf, emmental, gruyère, comté, mozzarella, parmesan, feta, chèvre, camembert, raclette, ricotta, mascarpone, jambon, lardon, bacon, chorizo, saucisson, rillettes, pâté, surimi, houmous, gnocchi, ravioli, tortellini, flan, pâte feuilletée, pâte brisée, pâte à pizza, charcuterie, burrata, margarine, poitrine fumée, raviole, tarama, sushi, parmigiano, dessert fruitier, crème dessert, liégeois, mousse au chocolat'],
+        'viande' => ['Viande & poisson', 'viande, poulet, dinde, boeuf, veau, porc, agneau, canard, steak, steak haché, viande hachée, escalope, côte, côtelette, rôti, saucisse, merguez, chipolata, filet, cuisse, poisson, saumon, cabillaud, colin, truite, crevette, moule, gambas'],
+        'epicerie' => ['Épicerie salée', 'pâte, spaghetti, tagliatelle, penne, coquillette, riz, semoule, couscous, quinoa, boulgour, lentille, pois chiche, haricot, farine, maïzena, huile, vinaigre, sel, poivre, épice, curry, paprika, cumin, moutarde, ketchup, mayonnaise, sauce, sauce tomate, pesto, bouillon, soupe, conserve, thon, sardine, maquereau, maïs, olive, cornichon, chips, cacahuète, apéritif, crackers, purée, tomates concassées, concentré de tomate, amande, pistache, noix de cajou, chapelure, cannelle, piment, graine, nouille, fajitas, kit fajitas, wasabi, sauce soja'],
+        'sucre' => ['Sucré & petit-déj', "sucre, chocolat, café, thé, tisane, infusion, cacao, céréale, muesli, flocons d'avoine, confiture, miel, biscuit, gâteau, madeleine, nutella, pâte à tartiner, compote, bonbon, levure, crêpe, cassonade, spéculoos, noix de coco râpée"],
+        'boissons' => ['Boissons', "eau, eau gazeuse, jus, jus d'orange, soda, coca, limonade, sirop, bière, vin, rosé, champagne, ice tea, perrier, boisson, boisson végétale, kombucha, boisson énergisante"],
+        'surgeles' => ['Surgelés', 'surgelé, glace, sorbet, frites, pizza, poisson pané, nuggets, poêlée'],
+        'hygiene' => ['Hygiène & beauté', 'shampoing, shampooing, après-shampoing, gel douche, savon, dentifrice, brosse à dents, déodorant, déo, coton, coton-tige, rasoir, mouchoir, papier toilette, serviette hygiénique, tampon, crème solaire, crème hydratante, démaquillant, brossette, mousse coiffante, coton-tige'],
+        'entretien' => ['Maison & entretien', 'lessive, adoucissant, liquide vaisselle, pastille lave-vaisselle, tablette lave-vaisselle, éponge, sac poubelle, essuie-tout, sopalin, javel, nettoyant, vinaigre blanc, papier alu, papier aluminium, film alimentaire, papier cuisson, allumette, ampoule, pile, bicarbonate, désodorisant, gel wc, lingette, liquide de rinçage, parfum de linge, tablette, détartrant'],
+        'animaux' => ['Animaux', 'chat, chien, pour chat, pour chien, litière, croquette, pâtée, herbe à chat'],
         'autre' => ['Autre', ''],
     ];
 }
