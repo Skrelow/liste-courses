@@ -11,7 +11,7 @@ $admin = is_admin($user); // Robin : placard et imports en plus
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="assets/icon.svg">
 <link rel="apple-touch-icon" href="assets/icon.svg">
-<link rel="stylesheet" href="assets/style.css?v=14">
+<link rel="stylesheet" href="assets/style.css?v=15">
 </head><body>
 <header><h1>🛒 Courses</h1><span><?= h($user) ?> · <a href="logout.php">Quitter</a></span></header>
 <nav id="tabs">
@@ -77,5 +77,5 @@ window.USER = <?= json_encode($user, JSON_UNESCAPED_UNICODE) ?>;
 window.ADMIN = <?= $admin ? 'true' : 'false' ?>;
 window.AISLES = <?= json_encode(array_map(fn($a) => $a[0], aisles()), JSON_UNESCAPED_UNICODE) ?>;
 </script>
-<script src="assets/app.js?v=14"></script>
+<script src="assets/app.js?v=15"></script>
 </body></html>

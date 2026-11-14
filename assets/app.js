@@ -227,7 +227,7 @@ function renderDrive(buy) {
   if (!buy.length) return '<p class="empty">Rien à acheter 🎉</p>';
   const todo = buy.filter((p) => !inCart(p)), done = buy.filter(inCart);
   const row = (p) => `<div class="item drive${inCart(p) ? ' done' : ''}" data-id="${esc(p.id)}">${img(p.image_url, 'thumb')}
-      <span class="n" data-act="edit">${esc(p.name)}${qtyLabel(p)}${p.note ? `<small class="note">${esc(p.note)}</small>` : ''}${priceTag(linePrice(p), 'note price')}</span>
+      <span class="n" data-act="edit"><span class="nm">${esc(p.name)}${qtyLabel(p)}</span>${p.note ? `<small class="note">${esc(p.note)}</small>` : ''}${priceTag(linePrice(p), 'note price')}</span>
       ${shopLink(p, 'Ouvrir', 'shop-btn')}
       <button class="tick" data-act="cart" title="${inCart(p) ? 'Retirer du panier' : 'Mis au panier'}">${inCart(p) ? '↺' : '✓'}</button></div>${editBlock(p)}`;
   return grouped(todo).map(([k, items]) => `<h2 class="aisle">${esc(window.AISLES[k])}</h2>` + items.map(row).join('')).join('')
@@ -310,12 +310,12 @@ function render() {
         <div class="row"><button data-done>✓ Courses faites</button><button class="plain" data-drive="start">Commander chez Carrefour</button></div></div>`
     : '';
   $('#drive-bar').innerHTML = drive
-    ? `<div class="drive-head"><b>Commande Carrefour</b><span>${buy.filter(inCart).length} / ${buy.length} dans le panier</span><button class="plain" data-drive="finish">Terminer</button></div>`
+    ? `<div class="drive-head"><b>Commande Carrefour</b><span>🛒 ${buy.filter(inCart).length} / ${buy.length}</span><button class="plain" data-drive="finish">Terminer</button></div>`
     : '';
   $('#buy .list').innerHTML = drive ? renderDrive(buy) : buy.length
     ? grouped(buy).map(([k, items]) => `<h2 class="aisle">${esc(window.AISLES[k])}</h2>` + items.map((p) => `
         <div class="item" data-id="${esc(p.id)}"><input type="checkbox" data-act="bought" aria-label="Acheté">${img(p.image_url, 'thumb')}
-          <span class="n" data-act="edit">${esc(p.name)}${qtyLabel(p)}${p.note ? `<small class="note">${esc(p.note)}</small>` : ''}</span>
+          <span class="n" data-act="edit"><span class="nm">${esc(p.name)}${qtyLabel(p)}</span>${p.note ? `<small class="note">${esc(p.note)}</small>` : ''}</span>
           ${priceTag(linePrice(p))}${p.added_by && p.added_by !== window.USER ? `<span class="who" title="Ajouté par ${esc(p.added_by)}">${esc(initial(p.added_by))}</span>` : ''}
           <button class="x" data-act="out" title="Retirer de la liste">✕</button></div>${editBlock(p)}`).join('')).join('')
     : `<p class="empty">Rien à acheter 🎉<br><small>Ajoute un produit ci-dessus, ou pioche dans <a href="#" data-goto="usual">⭐ Habituels</a> et <a href="#" data-goto="plats">🍽️ Plats</a>.</small></p>`;
@@ -574,7 +574,7 @@ $('#import-recipe').addEventListener('submit', async (e) => {
   }
 });
 
-fetch('assets/recettes.json?v=14').then((r) => r.json()).then((j) => { ideas = j; render(); }).catch(() => {});
+fetch('assets/recettes.json?v=15').then((r) => r.json()).then((j) => { ideas = j; render(); }).catch(() => {});
 
 /* ---------- Robin seulement : placard et imports ---------- */
 

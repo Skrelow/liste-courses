@@ -93,3 +93,12 @@ button.wide { width:100%; font-size:15px; padding:12px; margin:8px 0; }
 .chip small { color:var(--muted); } .chip.on { background:var(--green); border-color:var(--green); color:#fff; } .chip.on small { color:#d6eedd; }
 .pcard { position:relative; cursor:pointer; }
 .pdel { position:absolute; top:6px; right:6px; width:28px; height:28px; border-radius:50%; padding:0; font-size:14px; background:rgba(0,0,0,.55); color:#fff; }
+/* v15 : corrections d'affichage */
+.item .qty { white-space:nowrap; }
+.item .nm { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.drive-head span { white-space:nowrap; }
+@media (prefers-color-scheme: dark) {
+  #toast { background:#2e3829; color:#eef1e8; box-shadow:0 4px 16px rgba(0,0,0,.5); }
+  .item .tick { border-color:#4a5544; }
+  .who { background:#3a4535; color:#cfd8c9; }
+}
