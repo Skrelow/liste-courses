@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__ . '/app/bootstrap.php';
+require __DIR__ . '/app/recipes.php';
 
 $user = require_login(true);
 header('Content-Type: application/json; charset=utf-8');
@@ -15,13 +16,24 @@ function out($data, int $code = 200): void
 /** statut : stock = on en a, buy = à acheter, out = on n'en a plus / on ne sait pas. */
 function snapshot(): array
 {
-    $products = q('SELECT id, name, status, category, qty, note, added_by, times_bought, last_bought FROM products ORDER BY name_key')->fetchAll();
-    $recipes = q('SELECT id, name FROM recipes ORDER BY name')->fetchAll();
-    $links = q('SELECT recipe_id, product_id FROM recipe_items')->fetchAll();
+    $products = q('SELECT id, name, status, category, qty, note, added_by, shop_url, times_bought, last_bought FROM products ORDER BY name_key')->fetchAll();
+    $recipes = q('SELECT id, name, source_url, servings FROM recipes ORDER BY name')->fetchAll();
+    $links = q('SELECT recipe_id, product_id, qty FROM recipe_items')->fetchAll();
     foreach ($recipes as &$r) {
-        $r['products'] = array_values(array_map(fn($l) => (int) $l['product_id'], array_filter($links, fn($l) => (int) $l['recipe_id'] === (int) $r['id'])));
+        $mine = array_values(array_filter($links, fn($l) => (int) $l['recipe_id'] === (int) $r['id']));
+        $r['products'] = array_map(fn($l) => (int) $l['product_id'], $mine);
+        $r['qty'] = array_map(fn($l) => (string) $l['qty'], $mine); // même ordre que products
     }
     return ['products' => $products, 'recipes' => $recipes];
+}
+
+/** Met à acheter les ingrédients qu'on n'a pas, avec la quantité de la recette si aucune n'est notée. */
+function recipe_to_buy(int $recipeId, string $user): void
+{
+    $items = q("SELECT p.id, p.qty, i.qty AS rqty FROM recipe_items i JOIN products p ON p.id = i.product_id WHERE i.recipe_id = ? AND p.status = 'out'", [$recipeId])->fetchAll();
+    foreach ($items as $it) {
+        q("UPDATE products SET status = 'buy', added_by = ?, qty = ? WHERE id = ?", [$user, $it['qty'] !== '' ? $it['qty'] : mb_substr((string) $it['rqty'], 0, 20), $it['id']]);
+    }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -72,6 +84,10 @@ switch ($action) {
         if ($category) {
             q('UPDATE products SET category = ? WHERE id = ?', [$category, $id]);
         }
+        if (array_key_exists('shop_url', $in)) { // lien direct vers le produit chez Carrefour (ou vide)
+            $url = trim((string) $in['shop_url']);
+            q('UPDATE products SET shop_url = ? WHERE id = ?', [preg_match('#^https://\S{5,490}$#', $url) ? $url : null, $id]);
+        }
         if ($name !== '') {
             $name = mb_substr(preg_replace('/\s+/', ' ', $name), 0, 160);
             $other = q('SELECT id FROM products WHERE name_key = ? AND id <> ?', [mb_strtolower($name), $id])->fetchColumn();
@@ -105,21 +121,26 @@ switch ($action) {
             q("UPDATE products SET status = 'stock', qty = '', added_by = NULL, times_bought = times_bought + 1, last_bought = ? WHERE id = ?", [date('Y-m-d'), product_id((string) $n)]);
         }
         break;
-    case 'save_recipe':
+    case 'import_url': // lit une recette sur un site (aperçu, rien n'est enregistré)
+        $recipe = fetch_recipe(trim((string) ($in['url'] ?? '')));
+        $recipe ? out(['recipe' => $recipe]) : out(['error' => 'recipe'], 422);
+        // no break : out() termine le script
+    case 'save_recipe': // ingrédients au format libre : « 200 g de farine », « 3 œufs »…
         if ($name === '') {
             out(['error' => 'name'], 422);
         }
+        $src = trim((string) ($in['source_url'] ?? ''));
+        $src = preg_match('#^https?://\S{5,490}$#', $src) ? $src : null;
+        $servings = mb_substr(trim((string) ($in['servings'] ?? '')), 0, 40) ?: null;
         if ($id) {
-            q('UPDATE recipes SET name = ? WHERE id = ?', [mb_substr($name, 0, 160), $id]);
-            q('DELETE FROM recipe_items WHERE recipe_id = ?', [$id]);
+            q('UPDATE recipes SET name = ?, source_url = COALESCE(?, source_url), servings = COALESCE(?, servings) WHERE id = ?', [mb_substr($name, 0, 160), $src, $servings, $id]);
         } else {
-            q('INSERT INTO recipes (name) VALUES (?)', [mb_substr($name, 0, 160)]);
+            q('INSERT INTO recipes (name, source_url, servings) VALUES (?,?,?)', [mb_substr($name, 0, 160), $src, $servings]);
             $id = (int) db()->lastInsertId();
         }
-        foreach (array_slice((array) ($in['ingredients'] ?? []), 0, 60) as $n) {
-            if (trim((string) $n) !== '') {
-                q('INSERT INTO recipe_items (recipe_id, product_id) VALUES (?,?) ' . (db()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' ? 'ON CONFLICT DO NOTHING' : 'ON DUPLICATE KEY UPDATE recipe_id = recipe_id'), [$id, product_id((string) $n)]);
-            }
+        save_recipe_items($id, (array) ($in['ingredients'] ?? []));
+        if (!empty($in['to_buy'])) {
+            recipe_to_buy($id, $user);
         }
         break;
     case 'delete_recipe':
@@ -127,7 +148,7 @@ switch ($action) {
         q('DELETE FROM recipes WHERE id = ?', [$id]);
         break;
     case 'recipe_to_buy': // met à acheter tout ce qui manque pour ce plat
-        q("UPDATE products SET status = 'buy', added_by = ? WHERE status = 'out' AND id IN (SELECT product_id FROM recipe_items WHERE recipe_id = ?)", [$user, $id]);
+        recipe_to_buy($id, $user);
         break;
     default:
         out(['error' => 'action'], 400);

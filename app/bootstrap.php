@@ -62,20 +62,34 @@ function db(): PDO
     return $pdo;
 }
 
-/** Ajoute les colonnes apparues après la première version (rayon, quantité, note, qui l'a ajouté). */
+/** Ajoute les colonnes apparues après la première version (rayon, quantité, note, lien Carrefour, recettes…). */
 function migrate(PDO $pdo): void
 {
     $sqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
-    $cols = array_column($pdo->query($sqlite ? 'PRAGMA table_info(products)' : 'SHOW COLUMNS FROM products')->fetchAll(), $sqlite ? 'name' : 'Field');
+    $columns = fn(string $t) => array_column($pdo->query($sqlite ? "PRAGMA table_info($t)" : "SHOW COLUMNS FROM $t")->fetchAll(), $sqlite ? 'name' : 'Field');
     $wanted = [
-        'category' => 'VARCHAR(20) NULL',
-        'qty' => "VARCHAR(20) NOT NULL DEFAULT ''",
-        'note' => "VARCHAR(160) NOT NULL DEFAULT ''",
-        'added_by' => 'VARCHAR(40) NULL',
+        'products' => [
+            'category' => 'VARCHAR(20) NULL',
+            'qty' => "VARCHAR(20) NOT NULL DEFAULT ''",
+            'note' => "VARCHAR(160) NOT NULL DEFAULT ''",
+            'added_by' => 'VARCHAR(40) NULL',
+            'shop_url' => 'VARCHAR(500) NULL',
+        ],
+        'recipes' => [
+            'source_url' => 'VARCHAR(500) NULL',
+            'servings' => 'VARCHAR(40) NULL',
+        ],
+        'recipe_items' => [
+            'qty' => "VARCHAR(40) NOT NULL DEFAULT ''",
+        ],
     ];
-    foreach ($wanted as $col => $def) {
-        if (!in_array($col, $cols, true)) {
-            $pdo->exec("ALTER TABLE products ADD COLUMN $col $def");
+    $cols = $columns('products');
+    foreach ($wanted as $table => $defs) {
+        $have = $table === 'products' ? $cols : $columns($table);
+        foreach ($defs as $col => $def) {
+            if (!in_array($col, $have, true)) {
+                $pdo->exec("ALTER TABLE $table ADD COLUMN $col $def");
+            }
         }
     }
     if (!in_array('category', $cols, true)) {

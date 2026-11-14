@@ -1,0 +1,18 @@
+[
+  {"name": "Pâtes carbonara", "servings": "4 personnes", "ingredients": ["400 g de spaghetti", "200 g de lardons", "4 jaunes d'œufs", "80 g de parmesan", "Poivre"]},
+  {"name": "Lasagnes à la bolognaise", "servings": "6 personnes", "ingredients": ["12 feuilles de lasagnes", "500 g de bœuf haché", "1 oignon", "2 gousses d'ail", "800 g de tomates concassées", "50 cl de lait", "50 g de beurre", "50 g de farine", "100 g d'emmental râpé", "Huile d'olive"]},
+  {"name": "Chili con carne", "servings": "4 personnes", "ingredients": ["500 g de bœuf haché", "1 oignon", "1 poivron rouge", "400 g de haricots rouges", "400 g de tomates concassées", "1 c. à c. de cumin", "1 c. à c. de piment", "250 g de riz"]},
+  {"name": "Poulet curry coco", "servings": "4 personnes", "ingredients": ["600 g de blanc de poulet", "40 cl de lait de coco", "1 oignon", "2 c. à s. de curry", "1 gousse d'ail", "250 g de riz", "Coriandre"]},
+  {"name": "Quiche lorraine", "servings": "6 personnes", "ingredients": ["1 pâte brisée", "200 g de lardons", "3 œufs", "20 cl de crème fraîche", "20 cl de lait", "Muscade"]},
+  {"name": "Gratin dauphinois", "servings": "4 personnes", "ingredients": ["1 kg de pommes de terre", "50 cl de crème fraîche", "25 cl de lait", "2 gousses d'ail", "Muscade", "Beurre"]},
+  {"name": "Hachis parmentier", "servings": "4 personnes", "ingredients": ["1 kg de pommes de terre", "500 g de bœuf haché", "1 oignon", "20 cl de lait", "50 g de beurre", "80 g d'emmental râpé"]},
+  {"name": "Croque-monsieur", "servings": "4 personnes", "ingredients": ["8 tranches de pain de mie", "4 tranches de jambon", "150 g d'emmental râpé", "Beurre", "20 cl de béchamel"]},
+  {"name": "Pizza maison", "servings": "2 pizzas", "ingredients": ["2 pâtes à pizza", "20 cl de sauce tomate", "2 boules de mozzarella", "150 g de jambon", "200 g de champignons", "Origan"]},
+  {"name": "Salade César", "servings": "4 personnes", "ingredients": ["2 laitues romaines", "400 g de blanc de poulet", "80 g de parmesan", "Croûtons", "Sauce César"]},
+  {"name": "Saumon au four et riz", "servings": "4 personnes", "ingredients": ["4 pavés de saumon", "1 citron", "250 g de riz", "Aneth", "Huile d'olive"]},
+  {"name": "Soupe de légumes", "servings": "4 personnes", "ingredients": ["4 carottes", "2 poireaux", "3 pommes de terre", "1 navet", "1 oignon", "1 cube de bouillon"]},
+  {"name": "Tacos maison", "servings": "4 personnes", "ingredients": ["8 tortillas", "500 g de bœuf haché", "1 salade", "2 tomates", "1 oignon rouge", "150 g de cheddar râpé", "Crème fraîche", "Épices tacos"]},
+  {"name": "Risotto aux champignons", "servings": "4 personnes", "ingredients": ["300 g de riz arborio", "400 g de champignons", "1 oignon", "1 l de bouillon de volaille", "10 cl de vin blanc", "60 g de parmesan", "Beurre"]},
+  {"name": "Crêpes", "servings": "15 crêpes", "ingredients": ["250 g de farine", "4 œufs", "50 cl de lait", "50 g de beurre", "1 pincée de sel", "Sucre"]},
+  {"name": "Gâteau au chocolat", "servings": "6 personnes", "ingredients": ["200 g de chocolat noir", "150 g de beurre", "150 g de sucre", "4 œufs", "50 g de farine"]}
+]

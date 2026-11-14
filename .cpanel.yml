@@ -1,7 +1,5 @@
 ---
 deployment:
   tasks:
-    # config.php et data/ ne sont pas dans le depot : ils ne sont jamais ecrases.
-    - export DEPLOYPATH=/home/paro5944/courses.robinpastorel.com/
-    - /bin/cp -R app assets $DEPLOYPATH
-    - /bin/cp .htaccess index.php api.php login.php logout.php manifest.json sw.js $DEPLOYPATH
+    # Copie le code vers le site (voir deploy.sh). config.php et data/ ne sont pas dans le depot : jamais ecrases.
+    - /bin/sh /home/paro5944/repositories/liste-courses/deploy.sh --copy

@@ -39,3 +39,18 @@ h2.aisle { margin:16px 0 6px; } h2.aisle:first-child { margin-top:4px; }
 #toast button { background:none; color:#8fd3a8; font-size:14px; font-weight:600; padding:6px 8px; }
 #net { top:calc(8px + env(safe-area-inset-top)); background:#f3e6c4; color:#6b5210; padding:6px 12px; }
 [hidden] { display:none !important; }
+.item .shop { flex:none; text-decoration:none; font-size:18px; padding:2px 4px; opacity:.75; } .item .shop:hover { opacity:1; }
+button.drive-start { width:100%; font-size:15px; padding:12px; margin:10px 0 2px; }
+.drive-head { display:flex; align-items:center; gap:10px; margin:10px 0 2px; padding:10px 12px; border-radius:12px; background:#dff0e4; color:#1f5a38; font-size:14px; }
+.drive-head span { flex:1; } .drive-head button { font-size:14px; padding:8px 12px; width:auto; }
+.shop-btn { flex:none; background:var(--green); color:#fff; text-decoration:none; font-size:14px; padding:8px 12px; border-radius:10px; }
+.item .tick { flex:none; width:40px; height:36px; font-size:18px; padding:0; background:var(--card); color:var(--green); border:1px solid var(--line); }
+.item.drive.done .shop-btn { background:var(--line); color:var(--muted); }
+.drive-end p { margin:0 0 4px; } .drive-end .row > button { width:auto; font-size:15px; padding:10px 14px; }
+@media (prefers-color-scheme: dark) { .drive-head { background:#23402d; color:#cfe9d7; } }
+#plats h2.aisle { margin-top:20px; } #import-recipe { margin-bottom:14px; } #import-recipe .hint a { color:var(--green); }
+#recipe-form .row > button { width:auto; flex:1; font-size:15px; padding:12px; }
+.detail .ing { cursor:pointer; padding:3px 0; } .detail .ing small { color:var(--muted); }
+.detail .hint { font-size:13px; } .detail .hint a { color:var(--green); }
+.idea-head { cursor:pointer; } .detail .row > button { width:auto; font-size:15px; padding:10px 14px; }
+button:disabled { opacity:.6; }
