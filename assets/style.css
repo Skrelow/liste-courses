@@ -111,3 +111,12 @@ header span { display:flex; align-items:center; gap:6px; }
 .hint-bar span { flex:1; } .hint-bar button { width:auto; font-size:14px; padding:8px 12px; }
 .hint-bar .x { background:none; color:#1f5a38; padding:4px 8px; }
 @media (prefers-color-scheme: dark) { .hint-bar { background:#23402d; color:#cfe9d7; } .hint-bar .x { color:#cfe9d7; } }
+/* page Accès */
+header h1 a.back { text-decoration:none; color:var(--green); margin-right:4px; }
+.acces .item .n { flex:1; } form.inline { margin:0; }
+button.small { font-size:14px; padding:8px 12px; width:auto; }
+.acces .stack button { font-size:15px; }
+.acces .empty.small { margin:12px 0; font-size:14px; }
+.flash { background:var(--card); border:1px solid var(--green); border-radius:12px; padding:12px 14px; margin:8px 0 4px; }
+.flash p { margin:0 0 8px; } .flash .hint { margin:8px 0 0; } .flash .row > button { width:auto; font-size:15px; padding:10px 14px; }
+.login .hint a, .acces .hint a { color:var(--green); }

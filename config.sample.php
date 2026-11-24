@@ -9,9 +9,10 @@ return [
         'password' => 'MOT_DE_PASSE_BDD',
         // 'path'  => __DIR__ . '/data/courses.sqlite', // si driver = 'sqlite' (tests)
     ],
-    // Prénoms proposés à la connexion
+    // Premiers comptes, créés au premier lancement (ensuite, les accès se gèrent dans l'appli : page « Accès »).
+    // Le premier prénom (ou 'admin') gère l'appli et peut inviter des amis qui auront leur propre liste.
     'users' => ['Robin', 'Toi'],
-    // Mot de passe commun à vous deux (ce fichier n'est ni versionné ni accessible depuis le web).
+    // Mot de passe de départ de ces comptes ; chacun peut ensuite le changer dans la page « Accès ».
     'password' => 'CHOISIS-UN-MOT-DE-PASSE',
     // Variante plus sûre : 'password_hash' => '...' (php -r "echo password_hash('mdp', PASSWORD_DEFAULT);")
     'timezone' => 'Europe/Paris',

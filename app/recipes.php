@@ -41,7 +41,7 @@ function recipe_product_id(string $name): int
     static $index = null;
     if ($index === null) {
         $index = [];
-        foreach (q('SELECT id, name FROM products')->fetchAll() as $p) {
+        foreach (q('SELECT id, name FROM products WHERE household_id = ?', [hh()])->fetchAll() as $p) {
             $index[loose_key($p['name'])] ??= (int) $p['id'];
         }
     }

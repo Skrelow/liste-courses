@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * Notifications « Robin a ajouté : lait, pain… » envoyées à l'autre personne, même appli fermée (Web Push).
+ * Notifications « Robin a ajouté : lait, pain… » envoyées aux autres personnes du foyer, même appli fermée (Web Push).
  * Le message push est vide (pas de chiffrement à faire) : le service worker vient ensuite lire le texte
  * sur api.php?notif=1. Seule la signature VAPID (ES256) est nécessaire, faite avec OpenSSL.
  */
@@ -18,6 +18,7 @@ function push_tables(): void
     db()->exec('CREATE TABLE IF NOT EXISTS settings (k VARCHAR(50) PRIMARY KEY, v TEXT NOT NULL)');
     db()->exec("CREATE TABLE IF NOT EXISTS push_subs (id $auto, user VARCHAR(40) NOT NULL, endpoint TEXT NOT NULL, hash CHAR(32) NOT NULL UNIQUE, created INT NOT NULL)");
     db()->exec("CREATE TABLE IF NOT EXISTS events (id $auto, author VARCHAR(40) NOT NULL, item VARCHAR(200) NOT NULL, created INT NOT NULL)");
+    add_columns(db(), 'events', ['household_id' => 'INT NOT NULL DEFAULT 1']);
 }
 
 function b64url(string $s): string
@@ -99,25 +100,26 @@ function record_added(string $author, array $items): void
     }
     push_tables();
     foreach ($items as $it) {
-        q('INSERT INTO events (author, item, created) VALUES (?,?,?)', [$author, $it, time()]);
+        q('INSERT INTO events (household_id, author, item, created) VALUES (?,?,?,?)', [hh(), $author, $it, time()]);
     }
     q('DELETE FROM events WHERE created < ?', [time() - 3 * 86400]);
     static $scheduled = false;
     if (!$scheduled) {
         $scheduled = true;
-        register_shutdown_function(fn() => notify_others($author));
+        $household = hh();
+        register_shutdown_function(fn() => notify_others($author, $household));
     }
 }
 
-/** Envoie un push (vide) à tous les appareils des autres personnes. Appelé après l'envoi de la réponse. */
-function notify_others(string $author): void
+/** Envoie un push (vide) aux appareils des autres personnes du foyer. Appelé après l'envoi de la réponse. */
+function notify_others(string $author, int $household): void
 {
     if (function_exists('fastcgi_finish_request')) {
         fastcgi_finish_request(); // l'appli de l'auteur n'attend pas l'envoi
     } elseif (function_exists('litespeed_finish_request')) {
         litespeed_finish_request(); // serveur LiteSpeed (o2switch)
     }
-    $subs = q('SELECT endpoint FROM push_subs WHERE user <> ?', [$author])->fetchAll();
+    $subs = q('SELECT s.endpoint FROM push_subs s JOIN users u ON u.name = s.user WHERE u.household_id = ? AND s.user <> ?', [$household, $author])->fetchAll();
     if (!$subs) {
         return;
     }
@@ -138,16 +140,16 @@ function notify_others(string $author): void
     }
 }
 
-/** Texte de la notification pour $user : ce que les autres ont ajouté depuis sa dernière notification. */
+/** Texte de la notification pour $user : ce que les autres du foyer ont ajouté depuis sa dernière notification. */
 function notification_for(string $user): ?array
 {
     push_tables();
     $key = 'seen_' . mb_substr($user, 0, 40);
     $seen = (int) q('SELECT v FROM settings WHERE k = ?', [$key])->fetchColumn();
-    $sql = 'SELECT id, author, item FROM events WHERE author <> ? AND id > ? AND created > ? ORDER BY id DESC LIMIT 50';
-    $rows = q($sql, [$user, $seen, time() - 6 * 3600])->fetchAll();
+    $sql = 'SELECT id, author, item FROM events WHERE household_id = ? AND author <> ? AND id > ? AND created > ? ORDER BY id DESC LIMIT 50';
+    $rows = q($sql, [hh(), $user, $seen, time() - 6 * 3600])->fetchAll();
     if (!$rows) { // rien de neuf (notification en double) : on reprend les derniers ajouts plutôt qu'un texte vague
-        $rows = q($sql, [$user, 0, time() - 6 * 3600])->fetchAll();
+        $rows = q($sql, [hh(), $user, 0, time() - 6 * 3600])->fetchAll();
         if (!$rows) {
             return null;
         }

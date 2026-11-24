@@ -15,5 +15,5 @@ if [ "$1" != "--copy" ]; then
 fi
 
 /bin/cp -R app assets "$DEPLOYPATH"
-/bin/cp .htaccess index.php api.php login.php logout.php manifest.json sw.js "$DEPLOYPATH"
+/bin/cp .htaccess index.php api.php login.php logout.php acces.php invite.php manifest.json sw.js "$DEPLOYPATH"
 echo "$(date '+%Y-%m-%d %H:%M') déployé $(git rev-parse --short HEAD)" >> "$REPO/../liste-courses-deploy.log"

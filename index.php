@@ -2,7 +2,8 @@
 declare(strict_types=1);
 require __DIR__ . '/app/bootstrap.php';
 $user = require_login();
-$admin = is_admin($user); // Robin : placard et imports en plus
+$admin = is_admin(); // la personne qui gère la liste : placard et imports en plus
+$others = array_column(q('SELECT name FROM users WHERE household_id = ? AND id <> ? ORDER BY id', [hh(), me()['id']])->fetchAll(), 'name');
 ?><!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -11,9 +12,9 @@ $admin = is_admin($user); // Robin : placard et imports en plus
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="assets/icon.svg">
 <link rel="apple-touch-icon" href="assets/icon.svg">
-<link rel="stylesheet" href="assets/style.css?v=16">
+<link rel="stylesheet" href="assets/style.css?v=17">
 </head><body>
-<header><h1>🛒 Courses</h1><span><button id="bell" class="bell" hidden title="Notifications" aria-label="Notifications">🔕</button><?= h($user) ?> · <a href="logout.php">Quitter</a></span></header>
+<header><h1>🛒 Courses</h1><span><button id="bell" class="bell" hidden title="Notifications" aria-label="Notifications">🔕</button><a href="acces.php" title="Mon compte et accès">👤 <?= h($user) ?></a> · <a href="logout.php">Quitter</a></span></header>
 <nav id="tabs">
   <button data-tab="buy" class="on">🛒 Liste</button><button data-tab="usual">⭐ Habituels</button><button data-tab="plats">🍽️ Plats</button><?php if ($admin): ?><button data-tab="stock" class="icon" title="Placard" aria-label="Placard">📦</button><button data-tab="import" class="icon" title="Import" aria-label="Import">⬇️</button><?php endif; ?>
 </nav>
@@ -76,8 +77,9 @@ $admin = is_admin($user); // Robin : placard et imports en plus
 window.CSRF = <?= json_encode(csrf()) ?>;
 window.USER = <?= json_encode($user, JSON_UNESCAPED_UNICODE) ?>;
 window.ADMIN = <?= $admin ? 'true' : 'false' ?>;
-window.OTHERS = <?= json_encode(array_values(array_diff((array) cfg('users', []), [$user])), JSON_UNESCAPED_UNICODE) ?>;
+window.OTHERS = <?= json_encode($others, JSON_UNESCAPED_UNICODE) ?>;
+window.HOUSEHOLD = <?= hh() ?>;
 window.AISLES = <?= json_encode(array_map(fn($a) => $a[0], aisles()), JSON_UNESCAPED_UNICODE) ?>;
 </script>
-<script src="assets/app.js?v=16"></script>
+<script src="assets/app.js?v=17"></script>
 </body></html>

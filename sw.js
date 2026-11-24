@@ -1,6 +1,6 @@
 // Mode hors ligne (la page reste consultable sans réseau) et notifications « Robin a ajouté… ».
-const CACHE = 'courses-v16';
-const ASSETS = ['assets/style.css?v=16', 'assets/app.js?v=16', 'assets/icon.svg', 'manifest.json'];
+const CACHE = 'courses-v17';
+const ASSETS = ['assets/style.css?v=17', 'assets/app.js?v=17', 'assets/icon.svg', 'manifest.json'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));

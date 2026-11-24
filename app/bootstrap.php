@@ -59,7 +59,95 @@ function db(): PDO
         PRIMARY KEY (recipe_id, product_id)
     )");
     migrate($pdo);
+    migrate_households($pdo);
     return $pdo;
+}
+
+/** Ajoute à $table les colonnes de $defs qui lui manquent ; retourne les colonnes ajoutées. */
+function add_columns(PDO $pdo, string $table, array $defs): array
+{
+    $sqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+    $have = array_column($pdo->query($sqlite ? "PRAGMA table_info($table)" : "SHOW COLUMNS FROM $table")->fetchAll(), $sqlite ? 'name' : 'Field');
+    $added = [];
+    foreach ($defs as $col => $def) {
+        if (!in_array($col, $have, true)) {
+            $pdo->exec("ALTER TABLE $table ADD COLUMN $col $def");
+            $added[] = $col;
+        }
+    }
+    return $added;
+}
+
+/**
+ * Plusieurs listes de courses : chaque foyer (households) a ses produits et ses plats ; chaque personne (users)
+ * a son mot de passe. À la première mise à jour, tout ce qui existe va au foyer n°1 et les prénoms de config.php
+ * deviennent des comptes (avec le mot de passe commun d'avant, chacun pourra le changer).
+ */
+function migrate_households(PDO $pdo): void
+{
+    $sqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+    $auto = $sqlite ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT AUTO_INCREMENT PRIMARY KEY';
+    $pdo->exec("CREATE TABLE IF NOT EXISTS households (id $auto, name VARCHAR(60) NOT NULL, created INT NOT NULL)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS users (
+        id $auto,
+        name VARCHAR(40) NOT NULL,
+        name_key VARCHAR(40) NOT NULL UNIQUE,
+        household_id INT NOT NULL,
+        pass_hash VARCHAR(255) NOT NULL,
+        role VARCHAR(10) NOT NULL DEFAULT 'member',
+        created INT NOT NULL
+    )");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS invites (
+        token_hash CHAR(64) PRIMARY KEY,
+        household_id INT NULL,
+        created_by VARCHAR(40) NOT NULL,
+        created INT NOT NULL,
+        expires INT NOT NULL
+    )");
+
+    foreach (['recipes', 'products'] as $t) {
+        if (add_columns($pdo, $t, ['household_id' => 'INT NOT NULL DEFAULT 1']) && $t === 'products') {
+            products_unique_per_household($pdo, $sqlite);
+        }
+    }
+
+    if (!$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn()) {
+        $names = array_values(array_filter(array_map(fn($n) => mb_substr(trim((string) $n), 0, 40), (array) cfg('users', []))));
+        if (!$names) {
+            return;
+        }
+        $hash = (string) cfg('password_hash', '');
+        $hash = $hash !== '' ? $hash : password_hash((string) cfg('password', bin2hex(random_bytes(12))), PASSWORD_DEFAULT);
+        $admin = (string) cfg('admin', $names[0]);
+        if (!$pdo->query('SELECT COUNT(*) FROM households WHERE id = 1')->fetchColumn()) {
+            $pdo->prepare('INSERT INTO households (id, name, created) VALUES (1, ?, ?)')->execute([$admin, time()]);
+        }
+        $ins = $pdo->prepare('INSERT INTO users (name, name_key, household_id, pass_hash, role, created) VALUES (?,?,1,?,?,?)');
+        foreach ($names as $n) {
+            $ins->execute([$n, mb_strtolower($n), $hash, $n === $admin ? 'admin' : 'member', time()]);
+        }
+    }
+}
+
+/** Un même nom de produit peut exister dans plusieurs foyers : l'unicité devient (foyer, nom). */
+function products_unique_per_household(PDO $pdo, bool $sqlite): void
+{
+    if (!$sqlite) {
+        foreach ($pdo->query('SHOW INDEX FROM products')->fetchAll() as $ix) {
+            if ($ix['Column_name'] === 'name_key' && (int) $ix['Non_unique'] === 0 && (int) $ix['Seq_in_index'] === 1) {
+                $pdo->exec('ALTER TABLE products DROP INDEX `' . str_replace('`', '', $ix['Key_name']) . '`');
+            }
+        }
+        $pdo->exec('ALTER TABLE products ADD UNIQUE KEY household_name (household_id, name_key)');
+        return;
+    }
+    $sql = (string) $pdo->query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'products'")->fetchColumn();
+    $sql = preg_replace('/(name_key\s+VARCHAR\(160\)\s+NOT NULL)\s+UNIQUE/i', '$1', $sql);
+    $sql = preg_replace('/\)\s*$/', ', UNIQUE (household_id, name_key))', $sql);
+    $pdo->exec('ALTER TABLE products RENAME TO products_old');
+    $pdo->exec($sql);
+    $pdo->exec('INSERT INTO products SELECT * FROM products_old');
+    $pdo->exec('DROP TABLE products_old');
 }
 
 /** Ajoute les colonnes apparues après la première version (rayon, quantité, note, lien Carrefour, recettes…). */
@@ -172,11 +260,11 @@ function product_id(string $name, string $status = 'out'): int
 {
     $name = mb_substr(trim(preg_replace('/\s+/', ' ', $name)), 0, 160);
     $key = mb_strtolower($name);
-    $id = q('SELECT id FROM products WHERE name_key = ?', [$key])->fetchColumn();
+    $id = q('SELECT id FROM products WHERE household_id = ? AND name_key = ?', [hh(), $key])->fetchColumn();
     if ($id) {
         return (int) $id;
     }
-    q('INSERT INTO products (name, name_key, status, category) VALUES (?,?,?,?)', [$name, $key, $status, guess_aisle($name)]);
+    q('INSERT INTO products (household_id, name, name_key, status, category) VALUES (?,?,?,?,?)', [hh(), $name, $key, $status, guess_aisle($name)]);
     return (int) db()->lastInsertId();
 }
 
@@ -185,15 +273,65 @@ function csrf(): string
     return $_SESSION['csrf'] ??= bin2hex(random_bytes(16));
 }
 
-function current_user(): ?string
+/** La personne connectée : ['id', 'name', 'household_id', 'role'] ou null. Le compte supprimé est déconnecté. */
+function me(): ?array
 {
-    return $_SESSION['user'] ?? null;
+    static $me = false;
+    if ($me !== false) {
+        return $me;
+    }
+    $me = null;
+    if (!empty($_SESSION['uid'])) {
+        $me = q('SELECT id, name, household_id, role FROM users WHERE id = ?', [(int) $_SESSION['uid']])->fetch() ?: null;
+    } elseif (!empty($_SESSION['user'])) { // session ouverte avant les comptes : on retrouve la personne par son prénom
+        $me = q('SELECT id, name, household_id, role FROM users WHERE name_key = ?', [mb_strtolower((string) $_SESSION['user'])])->fetch() ?: null;
+    }
+    if ($me) {
+        $me['id'] = (int) $me['id'];
+        $me['household_id'] = (int) $me['household_id'];
+        $_SESSION['uid'] = $me['id'];
+        $_SESSION['user'] = $me['name'];
+    } else {
+        unset($_SESSION['uid'], $_SESSION['user']);
+    }
+    return $me;
 }
 
-/** Celui qui gère l'appli (placard, imports) : 'admin' dans config.php, sinon le premier prénom. */
-function is_admin(?string $user): bool
+function current_user(): ?string
 {
-    return $user !== null && $user === (string) cfg('admin', ((array) cfg('users', []))[0] ?? '');
+    return me()['name'] ?? null;
+}
+
+/** Foyer de la personne connectée : toutes les données lues ou écrites sont limitées à ce foyer. */
+function hh(): int
+{
+    return (int) (me()['household_id'] ?? 0);
+}
+
+/** Celui qui gère l'appli : tous les foyers et tous les accès. */
+function is_superadmin(): bool
+{
+    return (me()['role'] ?? '') === 'admin';
+}
+
+/** Celui qui gère son foyer (placard, imports, invitations) : la personne qui l'a créé, et l'administrateur. */
+function is_admin(?string $user = null): bool
+{
+    return in_array(me()['role'] ?? '', ['admin', 'manager'], true);
+}
+
+function login_as(array $u): void
+{
+    session_regenerate_id(true);
+    $_SESSION['uid'] = (int) $u['id'];
+    $_SESSION['user'] = $u['name'];
+}
+
+/** Prénom accepté pour un compte : 1 à 40 caractères, lettres, chiffres, espace, tiret, apostrophe, point. */
+function clean_name(string $name): ?string
+{
+    $name = trim(preg_replace('/\s+/', ' ', $name));
+    return preg_match("/^[\p{L}\p{N}][\p{L}\p{N} .'’-]{0,39}$/u", $name) ? $name : null;
 }
 
 function require_login(bool $json = false): string
