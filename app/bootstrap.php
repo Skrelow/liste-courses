@@ -105,6 +105,15 @@ function migrate_households(PDO $pdo): void
         expires INT NOT NULL
     )");
 
+    // Sauvegarde avant la première modification : copie des tables (…_avant_comptes), à supprimer plus tard.
+    $hasCol = fn(string $t) => in_array('household_id', array_column($pdo->query($sqlite ? "PRAGMA table_info($t)" : "SHOW COLUMNS FROM $t")->fetchAll(), $sqlite ? 'name' : 'Field'), true);
+    if (!$hasCol('products')) {
+        foreach (['products', 'recipes', 'recipe_items'] as $t) {
+            $pdo->exec("DROP TABLE IF EXISTS {$t}_avant_comptes");
+            $pdo->exec("CREATE TABLE {$t}_avant_comptes AS SELECT * FROM $t");
+        }
+    }
+
     foreach (['recipes', 'products'] as $t) {
         if (add_columns($pdo, $t, ['household_id' => 'INT NOT NULL DEFAULT 1']) && $t === 'products') {
             products_unique_per_household($pdo, $sqlite);
