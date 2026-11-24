@@ -8,8 +8,10 @@ const store = {
 
 // Données affichées = dernier état reçu du serveur + modifications pas encore envoyées (file d'attente).
 // Autre liste que la dernière ouverte sur cet appareil (autre compte) : on oublie ce qui était gardé hors ligne.
-if (store.get('courses-household', null) !== window.HOUSEHOLD) {
-  ['courses-data', 'courses-queue', 'courses-drive', 'courses-hidden-ideas', 'courses-usual-filter'].forEach((k) => { try { localStorage.removeItem(k); } catch {} });
+// (Rien de noté = appareil utilisé avant les listes séparées : c'était la liste n°1, on garde tout.)
+const lastHousehold = store.get('courses-household', null);
+if (lastHousehold !== window.HOUSEHOLD) {
+  if (lastHousehold !== null || window.HOUSEHOLD !== 1) ['courses-data', 'courses-queue', 'courses-drive', 'courses-hidden-ideas', 'courses-usual-filter'].forEach((k) => { try { localStorage.removeItem(k); } catch {} });
   store.set('courses-household', window.HOUSEHOLD);
 }
 let data = store.get('courses-data', { products: [], recipes: [] });
